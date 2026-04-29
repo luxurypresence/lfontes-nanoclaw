@@ -280,14 +280,55 @@ function extractAttachmentFiles(
     return contentStr;
   }
 
-  const attachments = parsed.attachments as Array<Record<string, unknown>> | undefined;
-  if (!Array.isArray(attachments)) return contentStr;
-
   if (!isSafeAttachmentName(messageId)) {
     log.warn('Rejecting unsafe inbound message id', { messageId });
     return contentStr;
   }
 
+  let changed = false;
+
+  const topLevel = parsed.attachments as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(topLevel)) {
+    if (stageBatch(agentGroupId, sessionId, messageId, [messageId], topLevel)) changed = true;
+  }
+
+  // Thread context attachments (Slack first-engagement seeding — see
+  // src/channels/slack.ts toSeedEntry). Stage under inbox/<msgId>/ctx/<priorId>/
+  // so filenames from different parent messages don't collide and the
+  // formatter can render a real localPath the agent can Read.
+  const ctxEntries = parsed.threadContext as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(ctxEntries)) {
+    for (const entry of ctxEntries) {
+      const ctxAttachments = entry.attachments as Array<Record<string, unknown>> | undefined;
+      if (!Array.isArray(ctxAttachments) || ctxAttachments.length === 0) continue;
+      const rawCtxId = typeof entry.id === 'string' ? entry.id : '';
+      if (!isSafeAttachmentName(rawCtxId)) {
+        log.warn('Skipping thread-context attachments with unsafe id', { messageId, rawCtxId });
+        continue;
+      }
+      if (stageBatch(agentGroupId, sessionId, messageId, [messageId, 'ctx', rawCtxId], ctxAttachments)) {
+        changed = true;
+      }
+    }
+  }
+
+  return changed ? JSON.stringify(parsed) : contentStr;
+}
+
+/**
+ * Stage a batch of attachments into `inbox/<...subPath>/`. Mutates each
+ * attachment in place: removes `data`, sets `localPath`, normalizes `name`.
+ * Returns true if any attachment was written. All defenses (symlink refusal,
+ * realpath containment under the session inbox root, wx flag) are applied
+ * here so callers don't have to re-derive them per code path.
+ */
+function stageBatch(
+  agentGroupId: string,
+  sessionId: string,
+  messageId: string,
+  subPath: string[],
+  attachments: Array<Record<string, unknown>>,
+): boolean {
   let changed = false;
   for (const att of attachments) {
     if (typeof att.data !== 'string') continue;
@@ -302,11 +343,8 @@ function extractAttachmentFiles(
       });
     }
 
-    const inboxDir = path.join(sessionDir(agentGroupId, sessionId), 'inbox', messageId);
+    const inboxDir = path.join(sessionDir(agentGroupId, sessionId), 'inbox', ...subPath);
 
-    // Refuse to mkdir through a symlink that the container may have pre placed
-    // at inboxDir. With recursive:true, mkdirSync would silently no op on a
-    // pre existing symlink and the subsequent writeFileSync would follow it.
     if (fs.existsSync(inboxDir)) {
       const stat = fs.lstatSync(inboxDir);
       if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -331,9 +369,6 @@ function extractAttachmentFiles(
 
     const filePath = path.join(inboxDir, filename);
     try {
-      // wx = exclusive create. Refuses to follow a pre existing symlink or
-      // overwrite any existing file. The host expects to be the sole writer
-      // of these attachments.
       fs.writeFileSync(filePath, Buffer.from(att.data as string, 'base64'), { flag: 'wx' });
     } catch (err: unknown) {
       const e = err as NodeJS.ErrnoException;
@@ -348,13 +383,12 @@ function extractAttachmentFiles(
     }
 
     att.name = filename;
-    att.localPath = `inbox/${messageId}/${filename}`;
+    att.localPath = ['inbox', ...subPath, filename].join('/');
     delete att.data;
     changed = true;
-    log.debug('Saved attachment to inbox', { messageId, filename, size: att.size });
+    log.debug('Saved attachment to inbox', { messageId, localPath: att.localPath, size: att.size });
   }
-
-  return changed ? JSON.stringify(parsed) : contentStr;
+  return changed;
 }
 
 /** Open the inbound DB for a session (host reads/writes). */
@@ -525,6 +559,60 @@ export function clearOutbox(agentGroupId: string, sessionId: string, messageId: 
   } catch (err) {
     log.warn('Outbox cleanup failed (message already delivered)', { messageId, err });
   }
+}
+
+/**
+ * Delete inbox/<msgId> dirs older than ttlMs (mtime-based). Inbox attachments
+ * accumulate per-message and never get cleaned up otherwise; with thread-context
+ * seeding (Slack), every engagement now also stages prior-thread files,
+ * compounding the growth. Called from the host sweep on a TTL window.
+ *
+ * Safety mirrors clearOutbox: refuse symlinks, realpath-contain under the
+ * session inbox root, swallow per-entry failures so one bad dir doesn't abort
+ * the whole sweep.
+ */
+export function pruneInboxOlderThan(agentGroupId: string, sessionId: string, ttlMs: number): number {
+  const inboxRoot = path.join(sessionDir(agentGroupId, sessionId), 'inbox');
+  if (!fs.existsSync(inboxRoot)) return 0;
+
+  let realInboxRoot: string;
+  try {
+    realInboxRoot = fs.realpathSync(inboxRoot);
+  } catch {
+    return 0;
+  }
+
+  const cutoff = Date.now() - ttlMs;
+  let removed = 0;
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(inboxRoot);
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(inboxRoot, entry);
+    try {
+      const stat = fs.lstatSync(fullPath);
+      if (stat.isSymbolicLink()) {
+        log.warn('Refusing to follow symlink during inbox prune', { fullPath });
+        continue;
+      }
+      if (!stat.isDirectory()) continue;
+      if (stat.mtimeMs > cutoff) continue;
+
+      const realFull = fs.realpathSync(fullPath);
+      if (!isPathInside(realInboxRoot, realFull)) {
+        log.warn('Inbox prune target escaped session inbox root', { fullPath });
+        continue;
+      }
+      fs.rmSync(realFull, { recursive: true, force: true });
+      removed++;
+    } catch (err) {
+      log.warn('Failed to prune inbox dir', { fullPath, err });
+    }
+  }
+  return removed;
 }
 
 /** Mark a container as running for a session. */

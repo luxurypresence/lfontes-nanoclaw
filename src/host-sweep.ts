@@ -43,7 +43,14 @@ import {
   type ContainerState,
 } from './db/session-db.js';
 import { log } from './log.js';
-import { openInboundDb, openOutboundDb, openOutboundDbRw, inboundDbPath, heartbeatPath } from './session-manager.js';
+import {
+  openInboundDb,
+  openOutboundDb,
+  openOutboundDbRw,
+  inboundDbPath,
+  heartbeatPath,
+  pruneInboxOlderThan,
+} from './session-manager.js';
 import { isContainerRunning, killContainer, wakeContainer } from './container-runner.js';
 import type { Session } from './types.js';
 
@@ -66,6 +73,11 @@ export const ABSOLUTE_CEILING_MS = 30 * 60 * 1000;
 // Stuck tolerance window applied per 'processing' claim — "did we see any
 // signs of life since this message was claimed?"
 export const CLAIM_STUCK_MS = 60 * 1000;
+// TTL for inbox/<msgId> attachment dirs. Older message-attachment trees get
+// pruned during the host sweep. 14 days is long enough that the agent can
+// re-read files referenced in the same long-running thread for the typical
+// week-or-two response cycle, short enough that disk doesn't grow unbounded.
+const INBOX_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_TRIES = 5;
 const BACKOFF_BASE_MS = 5000;
 
@@ -205,6 +217,13 @@ async function sweepSession(session: Session): Promise<void> {
     const { handleRecurrence } = await import('./modules/scheduling/recurrence.js');
     await handleRecurrence(inDb, session);
     // MODULE-HOOK:scheduling-recurrence:end
+
+    // 6. Prune old inbox attachment dirs (see pruneInboxOlderThan). Cheap
+    // when nothing is due for cleanup — one readdir per sweep tick.
+    const pruned = pruneInboxOlderThan(agentGroup.id, session.id, INBOX_TTL_MS);
+    if (pruned > 0) {
+      log.info('Pruned old inbox attachment dirs', { sessionId: session.id, count: pruned });
+    }
   } finally {
     inDb.close();
     outDb?.close();

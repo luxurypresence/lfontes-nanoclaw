@@ -174,12 +174,13 @@ function formatSingleChat(msg: MessageInRow): string {
   const text = content.text || '';
   const idAttr = msg.seq != null ? ` id="${msg.seq}"` : '';
   const replyAttr = content.replyTo?.id ? ` reply_to="${escapeXml(String(content.replyTo.id))}"` : '';
+  const threadContextPrefix = formatThreadContext(content.threadContext);
   const replyPrefix = formatReplyContext(content.replyTo);
   const attachmentsSuffix = formatAttachments(content.attachments);
 
   const fromAttr = originAttr(msg);
 
-  return `<message${idAttr}${fromAttr} sender="${escapeXml(sender)}" time="${escapeXml(time)}"${replyAttr}>${replyPrefix}${escapeXml(text)}${attachmentsSuffix}</message>`;
+  return `<message${idAttr}${fromAttr} sender="${escapeXml(sender)}" time="${escapeXml(time)}"${replyAttr}>${threadContextPrefix}${replyPrefix}${escapeXml(text)}${attachmentsSuffix}</message>`;
 }
 
 /**
@@ -251,9 +252,37 @@ function formatAttachments(attachments: any[] | undefined): string {
     if (localPath) {
       return `[${type}: ${escapeXml(name)} — saved to ${escapeXml(localPath)}]`;
     }
+    if (a.error) {
+      // Download failed (typically a Slack files:read scope gap). Surface
+      // it so the agent can tell the user instead of pretending to read it.
+      return `[${type}: ${escapeXml(name)} — could not download (${escapeXml(String(a.error))})]`;
+    }
     return url ? `[${type}: ${escapeXml(name)} (${escapeXml(url)})]` : `[${type}: ${escapeXml(name)}]`;
   });
   return '\n' + parts.join('\n');
+}
+
+/**
+ * Render thread history seeded by the channel adapter on first engagement.
+ * Slack only forwards the engagement message; the bridge fills `threadContext`
+ * with prior thread messages so the agent knows what the conversation is about.
+ * Each entry is a compact `{ id, sender, text, time, attachments? }` shape;
+ * we render them inside a `<thread_context>` block above the actual message.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatThreadContext(entries: any[] | undefined): string {
+  if (!Array.isArray(entries) || entries.length === 0) return '';
+  const lines = ['\n  <thread_context>'];
+  for (const e of entries) {
+    const sender = e.sender || 'Unknown';
+    const time = e.time ? formatLocalTime(e.time, TIMEZONE) : '';
+    const timeAttr = time ? ` time="${escapeXml(time)}"` : '';
+    const text = e.text || '';
+    const attachmentsSuffix = formatAttachments(e.attachments);
+    lines.push(`    <m sender="${escapeXml(sender)}"${timeAttr}>${escapeXml(text)}${attachmentsSuffix}</m>`);
+  }
+  lines.push('  </thread_context>\n  ');
+  return lines.join('\n');
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

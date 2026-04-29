@@ -74,6 +74,18 @@ export interface ChatSdkBridgeConfig {
    * and reactions still target the head of the reply.
    */
   maxTextLength?: number;
+  /**
+   * Fetch prior context to seed the agent with on first engagement in a
+   * thread. Invoked from the `onNewMention` / `onNewMessage` paths only —
+   * `onSubscribedMessage` already has accumulated history, and DMs are a
+   * single continuous conversation. Whatever the hook returns is attached
+   * as `threadContext` on the inbound payload; the formatter renders it as
+   * a `<thread_context>` block. Slack needs this because it ships only the
+   * mentioned message; native gateway adapters (Discord) don't, since the
+   * gateway forwards every message in the channel regardless of engagement.
+   * Return null/empty to skip seeding.
+   */
+  fetchThreadContext?: (threadId: string, message: ChatMessage) => Promise<unknown[] | null>;
 }
 
 /**
@@ -127,13 +139,28 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
   let setupConfig: ChannelSetup;
   let gatewayAbort: AbortController | null = null;
 
+  // First-engagement thread seeding helper — see ChatSdkBridgeConfig.fetchThreadContext.
+  // Lives outside messageToInbound to keep that function's diff minimal vs. upstream.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function applyThreadSeed(serialized: Record<string, any>, message: ChatMessage): Promise<void> {
+    if (!config.fetchThreadContext || !message.threadId) return;
+    try {
+      const ctx = await config.fetchThreadContext(message.threadId, message);
+      if (Array.isArray(ctx) && ctx.length > 0) serialized.threadContext = ctx;
+    } catch (err) {
+      log.warn('Failed to fetch thread context', { adapter: adapter.name, err });
+    }
+  }
+
   async function messageToInbound(
     message: ChatMessage,
     isMention: boolean,
     isGroup?: boolean,
+    seedThreadContext?: boolean,
   ): Promise<InboundMessage> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const serialized = message.toJSON() as Record<string, any>;
+    if (seedThreadContext) await applyThreadSeed(serialized, message);
 
     // Download attachment data before serialization loses fetchData()
     if (message.attachments && message.attachments.length > 0) {
@@ -153,6 +180,12 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
             const buffer = await att.fetchData();
             entry.data = buffer.toString('base64');
           } catch (err) {
+            // Surface to the agent — without this the attachment row reaches
+            // inbound.db with no data and no localPath, and the formatter
+            // renders a bare `[image: foo.png]` that looks like the file is
+            // present. The marker lets formatAttachments render a "could not
+            // download" placeholder so the agent can tell the user.
+            entry.error = err instanceof Error ? err.message : String(err);
             log.warn('Failed to download attachment', { type: att.type, err });
           }
         }
@@ -232,7 +265,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
       // @mention in an unsubscribed thread — SDK-confirmed bot mention.
       chat.onNewMention(async (thread, message) => {
         const channelId = adapter.channelIdFromThreadId(thread.id);
-        await setupConfig.onInbound(channelId, thread.id, await messageToInbound(message, true, true));
+        await setupConfig.onInbound(channelId, thread.id, await messageToInbound(message, true, true, true));
       });
 
       // DMs — by definition addressed to the bot. Thread id flows through
@@ -262,7 +295,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
       // flood gate.
       chat.onNewMessage(/[\s\S]*/, async (thread, message) => {
         const channelId = adapter.channelIdFromThreadId(thread.id);
-        await setupConfig.onInbound(channelId, thread.id, await messageToInbound(message, false, true));
+        await setupConfig.onInbound(channelId, thread.id, await messageToInbound(message, false, true, true));
       });
 
       // Handle button clicks (ask_user_question)
