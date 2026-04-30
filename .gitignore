@@ -11,12 +11,15 @@ store/
 data/
 logs/
 
-# Groups - per-installation state, not tracked
+# Groups - track per-group config (system prompt + container config) for
+# instance reproducibility; ignore composer artifacts and runtime state.
 groups/*
+!groups/*/
+groups/*/*
+!groups/*/CLAUDE.local.md
+!groups/*/container.json
 
-# Composer-managed CLAUDE.md artifacts (regenerated every spawn) and
-# per-group memory (CLAUDE.local.md) must never be committed.
-**/CLAUDE.local.md
+# Composer-managed artifacts (regenerated every spawn)
 **/.claude-shared.md
 **/.claude-fragments/
 
@@ -37,5 +40,8 @@ groups/*
 
 # Skills system (local per-installation state)
 .nanoclaw/
+
+# Claude Code scheduled-tasks lock (live PID + session id, runtime artifact)
+.claude/scheduled_tasks.lock
 
 agents-sdk-docs

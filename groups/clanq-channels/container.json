@@ -1,0 +1,12 @@
+{
+  "mcpServers": {},
+  "packages": {
+    "apt": [],
+    "npm": []
+  },
+  "additionalMounts": [],
+  "skills": "all",
+  "groupName": "Clanq",
+  "assistantName": "Clanq",
+  "agentGroupId": "ag-1777561206647-w619cf"
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {},
+  "packages": {
+    "apt": [],
+    "npm": []
+  },
+  "additionalMounts": [],
+  "skills": "all",
+  "groupName": "Terminal Agent",
+  "assistantName": "Terminal Agent",
+  "agentGroupId": "ag-1777415593090-q7bzc9"
+}

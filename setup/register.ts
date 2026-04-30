@@ -41,6 +41,8 @@ interface RegisterArgs {
   assistantName: string;
   /** Session mode: 'shared' (one session per channel) or 'per-thread' */
   sessionMode: string;
+  /** Unknown-sender policy for new messaging groups: 'strict' | 'request_approval' | 'public' */
+  unknownSenderPolicy: 'strict' | 'request_approval' | 'public';
 }
 
 function parseArgs(args: string[]): RegisterArgs {
@@ -53,6 +55,7 @@ function parseArgs(args: string[]): RegisterArgs {
     requiresTrigger: false,
     assistantName: 'Andy',
     sessionMode: 'shared',
+    unknownSenderPolicy: 'strict',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -81,6 +84,16 @@ function parseArgs(args: string[]): RegisterArgs {
       case '--session-mode':
         result.sessionMode = args[++i] || 'shared';
         break;
+      case '--unknown-sender-policy': {
+        const v = (args[++i] || '').toLowerCase();
+        if (v !== 'strict' && v !== 'request_approval' && v !== 'public') {
+          throw new Error(
+            `--unknown-sender-policy must be one of: strict, request_approval, public (got: ${v})`,
+          );
+        }
+        result.unknownSenderPolicy = v;
+        break;
+      }
     }
   }
 
@@ -152,7 +165,7 @@ export async function run(args: string[]): Promise<void> {
       platform_id: parsed.platformId,
       name: parsed.name,
       is_group: 1,
-      unknown_sender_policy: 'strict',
+      unknown_sender_policy: parsed.unknownSenderPolicy,
       created_at: new Date().toISOString(),
     });
     messagingGroup = getMessagingGroupByPlatform(parsed.channel, parsed.platformId)!;
