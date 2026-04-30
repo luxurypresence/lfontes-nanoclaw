@@ -51,8 +51,10 @@ cp .env.example .env
 #   TZ                                    — system timezone
 
 # 6. Initialize OneCLI vault (Anthropic creds, OAuth tokens, etc.)
-#    Run /init-onecli or follow docs/onecli.md. Vault state is on the host
-#    filesystem outside this repo and must be re-imported per VM.
+#    Run /init-onecli or follow docs/onecli.md. Vault state is in Docker
+#    volumes (onecli_pgdata, onecli_app-data) outside this repo and must
+#    be re-imported per VM. See "OneCLI vault topology" below for the
+#    specific secrets + per-agent allowlists this instance needs.
 
 # 7. LP shared context — pre-clone the read-only LP repos that get mounted
 #    into agent containers. Add more repos here as you start using them.
@@ -92,6 +94,125 @@ systemctl --user start nanoclaw                            # Linux
 /bin/node dist/index.js
 ```
 
+## OneCLI vault topology
+
+The vault (secrets, agents, allowlists, rules) lives in Docker volumes
+`onecli_pgdata` and `onecli_app-data` — VM-local, not git-tracked. This
+section is the source of truth for what needs to be in the vault for this
+instance to function. Update this table *before* running the OneCLI
+commands so it never lags reality.
+
+### Secrets
+
+| Name | Type | Host pattern | Path pattern | Injection | Source for value |
+|---|---|---|---|---|---|
+| `Anthropic` | `anthropic` | `api.anthropic.com` | — | (built-in `x-api-key`) | Anthropic console |
+| `Auggie MCP (MintMCP)` | `generic` | `app.mintmcp.com` | `/o/luxury-presence/s/auggie-prd-api/*` | `Authorization: Bearer {value}` | MintMCP gateway → `auggie-prd-api` |
+| `Notion MCP (MintMCP)` | `generic` | `app.mintmcp.com` | `/o/luxury-presence/s/com-notion-mcp/*` | `Authorization: Bearer {value}` | MintMCP gateway → `com-notion-mcp` |
+| `Linear — Full Access` | `generic` | `mcp.linear.app` | — | `Authorization: Bearer {value}` | Linear → Settings → Account → Security & Access (full scope) |
+| `Linear — Read Only` | `generic` | `mcp.linear.app` | — | `Authorization: Bearer {value}` | Linear → Settings → Account → Security & Access (read-only scope) |
+
+For non-Anthropic bearer entries the canonical flag set is `--type generic
+--header-name Authorization --value-format "Bearer {value}"`. The legacy
+`--type bearer` shown in older docs no longer exists.
+
+**Path patterns disambiguate secrets that share a host.** Both Auggie and
+Notion live behind `app.mintmcp.com` (LP's MintMCP gateway routes multiple
+upstream MCPs through one host); each gets its own `--path-pattern` so
+OneCLI injects the correct bearer per upstream. Do the same any time you
+add another MintMCP-hosted MCP server.
+
+### Per-agent allowlists
+
+All three agents run in `secretMode: selective`. Two secrets share the
+`mcp.linear.app` host pattern (Linear full vs. read-only), so the
+per-agent allowlist (set via `onecli agents set-secrets --secret-ids ...`)
+is what determines which Linear key each agent gets injected.
+
+|  | `cli-with-luis` | `clanq-dm` | `clanq-channels` |
+|---|---|---|---|
+| `Anthropic` | ✓ | ✓ | ✓ |
+| `Auggie MCP (MintMCP)` | ✓ | ✓ | ✓ |
+| `Notion MCP (MintMCP)` | ✓ | ✓ | ✓ |
+| `Linear — Full Access` | ✓ | ✓ | — |
+| `Linear — Read Only` | — | — | ✓ |
+
+**Why the Linear split:** `clanq-channels` serves public Slack channels
+(e.g. `#bots`). The read-only Linear key prevents anyone in those channels
+from asking Clanq to file/edit/comment on Linear under the operator's
+identity. DM and CLI agents are operator-only and get full access.
+
+**Each agent should have at most one secret per (host pattern, path
+pattern) tuple in its allowlist.** OneCLI's matching behavior with
+multiple matches is undefined; keep the allowlist scoped. When two MCP
+services share a host (like the MintMCP gateway), use distinct path
+patterns on each secret so they don't both match the same request.
+
+### Replay on fresh VM
+
+```bash
+# A. Create the secrets — values come from your password manager / source pages
+onecli secrets create --name "Anthropic" --type anthropic \
+  --host-pattern "api.anthropic.com" --value "<anthropic-key>"
+
+onecli secrets create --name "Auggie MCP (MintMCP)" --type generic \
+  --host-pattern "app.mintmcp.com" \
+  --path-pattern "/o/luxury-presence/s/auggie-prd-api/*" \
+  --header-name "Authorization" --value-format "Bearer {value}" \
+  --value "<auggie-mintmcp-key>"
+
+onecli secrets create --name "Notion MCP (MintMCP)" --type generic \
+  --host-pattern "app.mintmcp.com" \
+  --path-pattern "/o/luxury-presence/s/com-notion-mcp/*" \
+  --header-name "Authorization" --value-format "Bearer {value}" \
+  --value "<notion-mintmcp-key>"
+
+onecli secrets create --name "Linear — Full Access" --type generic \
+  --host-pattern "mcp.linear.app" \
+  --header-name "Authorization" --value-format "Bearer {value}" \
+  --value "<linear-full-key>"
+
+onecli secrets create --name "Linear — Read Only" --type generic \
+  --host-pattern "mcp.linear.app" \
+  --header-name "Authorization" --value-format "Bearer {value}" \
+  --value "<linear-readonly-key>"
+
+# B. Send the first message to each agent group so onecli.ensureAgent()
+#    registers them. (Otherwise `onecli agents list` is empty.)
+
+# C. Collect IDs
+onecli agents list   # find each agent's OneCLI id by `identifier` (matches NanoClaw agent_groups.id)
+onecli secrets list  # find each secret's id by name
+
+# D. Pin allowlists per the matrix above
+CLI_ID=...      # ag-...-q7bzc9 (Terminal Agent / cli-with-luis)
+DM_ID=...       # ag-...-3evq8l (Clanq / clanq-dm)
+CH_ID=...       # ag-...-w619cf (Clanq / clanq-channels)
+ANTHROPIC=...
+AUGGIE=...
+NOTION=...
+LIN_FULL=...
+LIN_RO=...
+
+for AID in "$CLI_ID" "$DM_ID"; do
+  onecli agents set-secret-mode --id "$AID" --mode selective
+  onecli agents set-secrets --id "$AID" --secret-ids "$ANTHROPIC,$AUGGIE,$NOTION,$LIN_FULL"
+done
+onecli agents set-secret-mode --id "$CH_ID" --mode selective
+onecli agents set-secrets --id "$CH_ID" --secret-ids "$ANTHROPIC,$AUGGIE,$NOTION,$LIN_RO"
+```
+
+### Drift check
+
+```bash
+for AID in "$CLI_ID" "$DM_ID" "$CH_ID"; do
+  echo "=== $AID ==="
+  onecli agents secrets --id "$AID"
+done
+```
+
+Cross-reference the returned IDs against `onecli secrets list` by name.
+
 ## Adding a new agent group / channel later
 
 After `/manage-channels` (or a manual `setup register` call) creates new
@@ -100,7 +221,43 @@ DB entities and group config files on this VM:
 1. Update `scripts/seed-instance.ts` with the new entries in `AGENT_GROUPS`,
    `MESSAGING_GROUPS`, and `WIRING`. (Owner roles rarely change.)
 2. `git add` the new `groups/<folder>/CLAUDE.local.md` and `container.json`.
-3. Commit. The fresh-VM bootstrap will then include the new agent group.
+3. **Add a column to the OneCLI per-agent allowlist matrix** above. At
+   minimum the new agent needs `Anthropic`; mark whichever MCP secrets
+   apply per the `mcpServers` block in its `container.json`. Then on this
+   VM, run `onecli agents set-secret-mode --mode selective` and
+   `onecli agents set-secrets --secret-ids ...` for the new agent — the
+   matrix is the source of truth for what to set.
+4. Commit. The fresh-VM bootstrap will then include the new agent group.
+
+## Adding a new MCP server / secret later
+
+When wiring a new MCP server (e.g. Hex, GitHub, Notion, another HTTP MCP):
+
+1. Add the secret to the OneCLI vault — `onecli secrets create --type
+   generic --host-pattern <host> --header-name Authorization --value-format
+   "Bearer {value}" --value "<token>"` (or `--type anthropic` for Anthropic
+   keys). See `docs/adding-mcp-servers.md` for the full pattern A/B/C
+   recipes.
+2. **Add a row to the Secrets table** above with name, type, host pattern,
+   injection format, and where the value comes from.
+3. **Add a row to the Per-agent allowlists matrix** and mark ✓ / — for
+   each agent. Default to ✓ for all groups unless there's a concrete
+   safety reason to scope down (see the Linear full/read-only split).
+4. Update each opted-in group's `groups/<g>/container.json` with the
+   `mcpServers.<name>` entry.
+5. For each opted-in agent on this VM, re-run `onecli agents set-secrets
+   --secret-ids ...` with the **full allowlist including the new secret**.
+   `set-secrets` replaces the list entirely; it does not append. Look the
+   list up from the matrix.
+6. Restart any running containers so the new MCP wiring is read at spawn:
+   `docker ps --filter "label=nanoclaw-install=<install-hash>"` →
+   `docker rm -f <id>`.
+7. Commit container.json + the doc updates together.
+
+**Avoid two secrets on the same host pattern in the same agent's
+allowlist** — OneCLI's multi-match behavior is undefined. If you need
+different access levels per agent (like Linear), split into two secrets
+and use the matrix to pin one per agent.
 
 ## What gets you the same Slack bot, not just the same wiring
 
@@ -136,6 +293,16 @@ ls data/shared/pm-shared-context/CLAUDE.md
 
 # Mount allowlist permits data/shared
 jq '.allowedRoots[].path' ~/.config/nanoclaw/mount-allowlist.json
+
+# OneCLI vault matches the topology table
+onecli secrets list   # all secrets in the matrix above present by name
+onecli agents list    # all 3 agents present, each in `secretMode: selective`
+for AID in $(onecli agents list 2>/dev/null | jq -r '.data[].id'); do
+  echo "=== $AID ==="
+  onecli agents secrets --id "$AID"
+done
+# Cross-reference returned secret IDs against `onecli secrets list` to
+# confirm each agent's allowlist matches the matrix.
 ```
 
 ## Adding more LP shared repos later
