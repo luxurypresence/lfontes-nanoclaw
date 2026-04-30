@@ -4,7 +4,9 @@
     "apt": [],
     "npm": []
   },
-  "additionalMounts": [],
+  "additionalMounts": [
+    { "hostPath": "data/shared", "containerPath": "shared", "readonly": true }
+  ],
   "skills": "all",
   "groupName": "Terminal Agent",
   "assistantName": "Terminal Agent",

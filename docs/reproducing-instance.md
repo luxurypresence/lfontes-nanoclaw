@@ -16,12 +16,13 @@ agent personalities, container config, channel wiring, owner role.
 
 **Not tracked (per-VM runtime state):**
 
-- `data/` — central DB (`v2.db`) and per-session DBs. Recreated by the seed script + at runtime.
+- `data/` — central DB (`v2.db`), per-session DBs, and host-cloned LP context repos under `data/shared/`. Recreated by the seed script + the LP shared-context bootstrap step + at runtime.
 - `logs/` — host logs.
 - `groups/<folder>/CLAUDE.md` — composed at every container spawn from `.claude-shared.md` + `.claude-fragments/`.
 - `groups/<folder>/.claude-shared.md`, `.claude-fragments/` — composer-managed.
 - `.env` — secrets and instance-local config (Slack tokens, OneCLI URL, TZ, etc.).
 - OneCLI agent vault — credentials live separately, see step 4 below.
+- `~/.config/nanoclaw/mount-allowlist.json` — host-side mount permission boundary. Required for `additionalMounts` in `container.json` to work. Recreate per VM (see bootstrap step below).
 
 ## Bootstrap recipe
 
@@ -53,14 +54,38 @@ cp .env.example .env
 #    Run /init-onecli or follow docs/onecli.md. Vault state is on the host
 #    filesystem outside this repo and must be re-imported per VM.
 
-# 7. Seed the central DB (idempotent — agent groups, messaging groups,
+# 7. LP shared context — pre-clone the read-only LP repos that get mounted
+#    into agent containers. Add more repos here as you start using them.
+mkdir -p data/shared
+gh repo clone luxurypresence/pm-shared-context data/shared/pm-shared-context
+# (gh must already be authed on the host: `gh auth status`)
+
+# 8. Mount allowlist — grant the host permission to mount data/shared/ into
+#    containers. Empty allowlist = all additional mounts blocked. The path
+#    is relative; the host resolves it against its cwd (project root).
+mkdir -p ~/.config/nanoclaw
+cat > ~/.config/nanoclaw/mount-allowlist.json <<'EOF'
+{
+  "allowedRoots": [
+    {
+      "path": "data/shared",
+      "allowReadWrite": false,
+      "description": "Host-cloned LP context repos, mounted read-only into agent containers."
+    }
+  ],
+  "blockedPatterns": [],
+  "nonMainReadOnly": true
+}
+EOF
+
+# 9. Seed the central DB (idempotent — agent groups, messaging groups,
 #    wiring, owner role)
 mise exec node@22 -- pnpm exec tsx scripts/seed-instance.ts
 
-# 8. Build host TypeScript
+# 10. Build host TypeScript
 pnpm run build
 
-# 9. Start the host (pick the right service flavor)
+# 11. Start the host (pick the right service flavor)
 launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist   # macOS
 systemctl --user start nanoclaw                            # Linux
 # Or run inline for testing:
@@ -105,4 +130,18 @@ sqlite3 data/v2.db "SELECT user_id, role FROM user_roles WHERE role='owner';"
 ls groups/cli-with-luis/CLAUDE.local.md groups/cli-with-luis/container.json
 ls groups/dm-with-luis/CLAUDE.local.md  groups/dm-with-luis/container.json
 ls groups/clanq-channels/CLAUDE.local.md groups/clanq-channels/container.json
+
+# LP shared context cloned and reachable
+ls data/shared/pm-shared-context/CLAUDE.md
+
+# Mount allowlist permits data/shared
+jq '.allowedRoots[].path' ~/.config/nanoclaw/mount-allowlist.json
 ```
+
+## Adding more LP shared repos later
+
+To pre-clone a second LP repo and have it appear under `/workspace/agent/shared/<repo>/`:
+
+1. `gh repo clone luxurypresence/<repo> data/shared/<repo>` on the host.
+2. Update `container/CLAUDE.md` with pointers into `shared/<repo>/<path>` so agents know what's in there.
+3. No `container.json` or allowlist changes needed — the existing `data/shared` mount picks up new subdirectories automatically.
