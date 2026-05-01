@@ -26,6 +26,7 @@ ARG BUN_VERSION=1.3.12
 
 # Local additions (kept after upstream pins so upstream bumps never conflict).
 ARG MCP_REMOTE_VERSION=0.1.38
+ARG GH_VERSION=2.92.0
 
 # ---- System dependencies -----------------------------------------------------
 # tini: correct PID 1 / signal forwarding so outbound.db writes finalize on
@@ -65,6 +66,12 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 # Belt-and-braces: prevent Playwright's postinstall from downloading its own
 # ~300MB Chromium. We've already installed the system one above.
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# gh CLI: OneCLI's HTTPS proxy injects the real PAT for github.com / api.github.com.
+# `gh` refuses to run without a token in env, so this placeholder unblocks the CLI;
+# the proxy overwrites the Authorization header before the request leaves the host.
+ENV GH_TOKEN=placeholder
+ENV GH_PROMPT_DISABLED=1
 
 # ---- Bun runtime -------------------------------------------------------------
 # Install via the official script (handles multi-arch detection), then move
@@ -120,6 +127,14 @@ RUN --mount=type=cache,target=/root/.cache/pnpm \
 # Actual script lives in the mounted source at /app/src/cli/ncl.ts.
 RUN printf '#!/bin/sh\nexec bun /app/src/cli/ncl.ts "$@"\n' > /usr/local/bin/ncl && \
     chmod +x /usr/local/bin/ncl
+
+# gh CLI: self-contained Go binary from upstream releases. apt's debian package
+# tends to lag; pinning the official tarball keeps the version deterministic.
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" -o /tmp/gh.tgz && \
+    tar -xzf /tmp/gh.tgz -C /tmp && \
+    install -m 0755 "/tmp/gh_${GH_VERSION}_linux_${ARCH}/bin/gh" /usr/local/bin/gh && \
+    rm -rf /tmp/gh.tgz "/tmp/gh_${GH_VERSION}_linux_${ARCH}"
 
 # ---- Entrypoint --------------------------------------------------------------
 COPY entrypoint.sh /app/entrypoint.sh
