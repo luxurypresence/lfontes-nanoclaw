@@ -128,7 +128,7 @@ sqlite3 data/v2.db "SELECT user_id, role FROM user_roles WHERE role='owner';"
 
 # Group folders are in place with system prompts + container config
 ls groups/cli-with-luis/CLAUDE.local.md groups/cli-with-luis/container.json
-ls groups/dm-with-luis/CLAUDE.local.md  groups/dm-with-luis/container.json
+ls groups/clanq-dm/CLAUDE.local.md      groups/clanq-dm/container.json
 ls groups/clanq-channels/CLAUDE.local.md groups/clanq-channels/container.json
 
 # LP shared context cloned and reachable

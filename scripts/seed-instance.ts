@@ -60,7 +60,7 @@ interface OwnerSpec {
 
 const AGENT_GROUPS: AgentGroupSpec[] = [
   { name: 'Terminal Agent', folder: 'cli-with-luis' },
-  { name: 'Clanq', folder: 'dm-with-luis' },
+  { name: 'Clanq', folder: 'clanq-dm' },
   { name: 'Clanq', folder: 'clanq-channels' },
 ];
 
@@ -98,7 +98,7 @@ const WIRING: WiringSpec[] = [
     engage_pattern: '.',
   },
   {
-    folder: 'dm-with-luis',
+    folder: 'clanq-dm',
     channel_type: 'slack',
     platform_id: 'slack:D0B0VTX5KMX',
     session_mode: 'shared',
