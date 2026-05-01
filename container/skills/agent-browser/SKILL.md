@@ -1,10 +1,12 @@
 ---
 name: agent-browser
-description: Browse the web for any task — research topics, read articles, interact with web apps, fill forms, take screenshots, extract data, and test web pages. Use whenever a browser would be useful, not just when the user explicitly asks.
+description: Drive a real Chromium browser for tasks that need interaction, auth, JS rendering, screenshots, PDFs, or downloads — fill forms, click buttons, log in, scrape SPAs, capture visual output. For plain "find me X" or "read this page" tasks, prefer the web-search skill (WebSearch / WebFetch) — it's faster and cheaper. Escalate to agent-browser only when a browser is actually needed.
 allowed-tools: Bash(agent-browser:*)
 ---
 
 # Browser Automation with agent-browser
+
+For read-only lookups (search, fetch a static page) use the `web-search` skill instead — `WebSearch` and `WebFetch` are an order of magnitude cheaper than spinning up Chromium. Use this skill when you need to interact with the page, get past auth, render JS, or capture visual output.
 
 ## Quick start
 
