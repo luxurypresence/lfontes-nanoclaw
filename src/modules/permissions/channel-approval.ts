@@ -240,13 +240,27 @@ export async function requestChannelApproval(input: RequestChannelApprovalInput)
 
 /**
  * Build normalized options for the agent-selection follow-up card.
+ *
+ * Disambiguates groups that share the same `name` by appending the folder.
+ * The persona name (`ag.name`) is reused as `assistantName` at runtime, so we
+ * can't rename the row to fix the picker — we just label the picker harder.
  */
 export function buildAgentSelectionOptions(agentGroups: AgentGroup[]): NormalizedOption[] {
-  const options: RawOption[] = agentGroups.map((ag) => ({
-    label: ag.name,
-    selectedLabel: `✅ Connected to ${ag.name}`,
-    value: `${CONNECT_PREFIX}${ag.id}`,
-  }));
+  const nameCounts = new Map<string, number>();
+  for (const ag of agentGroups) {
+    nameCounts.set(ag.name, (nameCounts.get(ag.name) ?? 0) + 1);
+  }
+  const labelFor = (ag: AgentGroup): string =>
+    (nameCounts.get(ag.name) ?? 0) > 1 ? `${ag.name} (${ag.folder})` : ag.name;
+
+  const options: RawOption[] = agentGroups.map((ag) => {
+    const label = labelFor(ag);
+    return {
+      label,
+      selectedLabel: `✅ Connected to ${label}`,
+      value: `${CONNECT_PREFIX}${ag.id}`,
+    };
+  });
   options.push({
     label: 'Cancel',
     selectedLabel: '🙅 Cancelled',

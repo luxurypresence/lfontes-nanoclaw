@@ -16,8 +16,13 @@
  * access gate is not registered and core defaults to allow-all.
  */
 import { recordDroppedMessage } from '../../db/dropped-messages.js';
-import { getAgentGroup, getAllAgentGroups } from '../../db/agent-groups.js';
-import { createMessagingGroupAgent, setMessagingGroupDeniedAt } from '../../db/messaging-groups.js';
+import { getAgentGroup, getAgentGroupByFolder, getAllAgentGroups } from '../../db/agent-groups.js';
+import {
+  createMessagingGroupAgent,
+  setMessagingGroupDeniedAt,
+  updateMessagingGroup,
+} from '../../db/messaging-groups.js';
+import { readEnvFile } from '../../env.js';
 import {
   routeInbound,
   setAccessGate,
@@ -289,7 +294,75 @@ registerResponseHandler(handleSenderApprovalResponse);
 
 // ── Unknown-channel registration flow ──
 
+/**
+ * Auto-wire fast path. When `DEFAULT_CHANNEL_AGENT_FOLDER` is set in `.env`
+ * and the unwired event is a group (channel, not DM), wire the messaging
+ * group to that agent without prompting. The wiring uses public-channel-
+ * agent defaults (`engage_mode='mention'`, `sender_scope='all'`) and flips
+ * the messaging group to `unknown_sender_policy='public'`, so the agent
+ * answers anyone who @-mentions it without an allowlist gate.
+ *
+ * Returns true when the channel was auto-wired (the caller skips the card
+ * flow). Returns false when no default is configured, the target folder
+ * doesn't resolve, or the event isn't a group — caller falls through.
+ *
+ * Local fork-only behavior. Re-applied as a top-of-rebase commit on
+ * upstream pulls.
+ */
+async function tryAutoWireDefaultGroupChannel(mg: MessagingGroup, event: InboundEvent): Promise<boolean> {
+  const isGroup = event.message?.isGroup ?? mg.is_group === 1;
+  if (!isGroup) return false;
+
+  const dotenv = readEnvFile(['DEFAULT_CHANNEL_AGENT_FOLDER']);
+  const folder = dotenv.DEFAULT_CHANNEL_AGENT_FOLDER;
+  if (!folder) return false;
+
+  const target = getAgentGroupByFolder(folder);
+  if (!target) {
+    log.warn('DEFAULT_CHANNEL_AGENT_FOLDER set but no matching agent group found', {
+      folder,
+      messagingGroupId: mg.id,
+    });
+    return false;
+  }
+
+  if (mg.unknown_sender_policy !== 'public') {
+    updateMessagingGroup(mg.id, { unknown_sender_policy: 'public' });
+  }
+
+  const mgaId = `mga-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  createMessagingGroupAgent({
+    id: mgaId,
+    messaging_group_id: mg.id,
+    agent_group_id: target.id,
+    engage_mode: 'mention',
+    engage_pattern: null,
+    sender_scope: 'all',
+    ignored_message_policy: 'drop',
+    session_mode: 'shared',
+    priority: 0,
+    created_at: new Date().toISOString(),
+  });
+
+  log.info('Auto-wired new channel to default agent', {
+    messagingGroupId: mg.id,
+    agentGroupFolder: folder,
+    agentGroupId: target.id,
+    mgaId,
+  });
+
+  extractAndUpsertUser(event);
+
+  try {
+    await routeInbound(event);
+  } catch (err) {
+    log.error('Auto-wire route replay failed', { messagingGroupId: mg.id, err });
+  }
+  return true;
+}
+
 setChannelRequestGate(async (mg, event) => {
+  if (await tryAutoWireDefaultGroupChannel(mg, event)) return;
   await requestChannelApproval({ messagingGroupId: mg.id, event });
 });
 
