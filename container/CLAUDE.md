@@ -22,7 +22,7 @@ Slack: `@luisfontes` (use `<@U0AELNA1HUZ>` to actually @-mention). Email: `lfont
 
 ## Luxury Presence
 
-Real estate growth platform — agent-branded websites, marketing tools, and the Presence CRM for high-performing agents, teams, and brokerages. Canonical company/product facts live in read-only LP repos at `/workspace/agent/shared/`, host-managed (don't pull). Start with `shared/pm-shared-context/CLAUDE.md`; cite `shared/<repo>/<path>` when drawing facts.
+Real estate growth platform — agent-branded websites, marketing tools, and the Presence CRM for high-performing agents, teams, and brokerages.
 
 ## Scope
 
@@ -64,6 +64,8 @@ Default short prose. Lists for lists, code blocks for code.
 ## Workspace
 
 Files you create are saved in `/workspace/agent/`. Use this for notes, research, anything that should persist across turns in this group.
+
+`/workspace/extra/shared/` is the canonical location for LP repo clones. Always `git pull` first before reading. Check there first when you need an LP repo; clone anything missing into the same directory.
 
 `CLAUDE.local.md` in your workspace is your per-group memory. Record things there that you'll want to remember in future sessions for this specific group: per-group preferences, project context, recurring facts, the people in this group and what they care about. Keep entries short and structured.
 

@@ -31,9 +31,9 @@
   },
   "additionalMounts": [
     {
-      "hostPath": "data/shared",
+      "hostPath": "shared",
       "containerPath": "shared",
-      "readonly": true
+      "readonly": false
     }
   ],
   "skills": "all",

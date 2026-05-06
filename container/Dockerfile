@@ -73,6 +73,11 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV GH_TOKEN=placeholder
 ENV GH_PROMPT_DISABLED=1
 
+# Canonical location for LP repo clones. Mounted RW from host shared/ via
+# groups/<group>/container.json#additionalMounts. Set unconditionally so the
+# navigator skill resolves clone paths through it without per-group env plumbing.
+ENV REPOS_ROOT=/workspace/extra/shared
+
 # ---- Bun runtime -------------------------------------------------------------
 # Install via the official script (handles multi-arch detection), then move
 # the binary to /usr/local/bin so the non-root `node` user can execute it.

@@ -11,6 +11,9 @@ store/
 data/
 logs/
 
+# Nested git repos (LP code clones, knowledge base) — managed separately
+/shared/*/
+
 # Groups - track per-group config (system prompt + container config) for
 # instance reproducibility; ignore composer artifacts and runtime state.
 groups/*

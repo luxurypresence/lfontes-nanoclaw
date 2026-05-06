@@ -56,13 +56,13 @@ cp .env.example .env
 #    be re-imported per VM. See "OneCLI vault topology" below for the
 #    specific secrets + per-agent allowlists this instance needs.
 
-# 7. LP shared context — pre-clone the read-only LP repos that get mounted
-#    into agent containers. Add more repos here as you start using them.
-mkdir -p data/shared
-gh repo clone luxurypresence/pm-shared-context data/shared/pm-shared-context
+# 7. LP shared context — pre-clone LP repos that get mounted into agent
+#    containers. Add more repos here as you start using them.
+mkdir -p shared
+gh repo clone luxurypresence/pm-shared-context shared/pm-shared-context
 # (gh must already be authed on the host: `gh auth status`)
 
-# 8. Mount allowlist — grant the host permission to mount data/shared/ into
+# 8. Mount allowlist — grant the host permission to mount shared/ into
 #    containers. Empty allowlist = all additional mounts blocked. The path
 #    is relative; the host resolves it against its cwd (project root).
 mkdir -p ~/.config/nanoclaw
@@ -70,9 +70,9 @@ cat > ~/.config/nanoclaw/mount-allowlist.json <<'EOF'
 {
   "allowedRoots": [
     {
-      "path": "data/shared",
-      "allowReadWrite": false,
-      "description": "Host-cloned LP context repos, mounted read-only into agent containers."
+      "path": "shared",
+      "allowReadWrite": true,
+      "description": "Host-cloned LP repos (pm-shared-context plus working clones). Read-write so agents can clone/pull/edit."
     }
   ],
   "blockedPatterns": [],
@@ -307,8 +307,8 @@ done
 
 ## Adding more LP shared repos later
 
-To pre-clone a second LP repo and have it appear under `/workspace/agent/shared/<repo>/`:
+To pre-clone a second LP repo and have it appear under `/workspace/extra/shared/<repo>/`:
 
-1. `gh repo clone luxurypresence/<repo> data/shared/<repo>` on the host.
+1. `gh repo clone luxurypresence/<repo> shared/<repo>` on the host.
 2. Update `container/CLAUDE.md` with pointers into `shared/<repo>/<path>` so agents know what's in there.
-3. No `container.json` or allowlist changes needed — the existing `data/shared` mount picks up new subdirectories automatically.
+3. No `container.json` or allowlist changes needed — the existing `shared` mount picks up new subdirectories automatically.
