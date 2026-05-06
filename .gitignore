@@ -48,3 +48,10 @@ groups/*/*
 .claude/scheduled_tasks.lock
 
 agents-sdk-docs
+
+# container/skills/ is populated by scripts/sync-shared-skills.ts from
+# lfontes-mono/skills/. The synced contents are gitignored — canonical
+# source is lfontes-mono. (If upstream ever adds tracked files under this
+# path, they'd remain tracked despite this rule — gitignore only affects
+# untracked files.)
+container/skills/*

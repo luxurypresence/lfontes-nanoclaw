@@ -34,6 +34,11 @@
       "hostPath": "shared",
       "containerPath": "shared",
       "readonly": false
+    },
+    {
+      "hostPath": "/home/exedev/lfontes-mono/wiki",
+      "containerPath": "lfontes-mono/wiki",
+      "readonly": false
     }
   ],
   "skills": "all",
