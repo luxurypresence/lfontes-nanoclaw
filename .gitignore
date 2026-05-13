@@ -6,10 +6,11 @@ node_modules/
 # Build output
 dist/
 
-# Local data & auth
-store/
-data/
-logs/
+# Local data & auth (repo-root only — `data/` unanchored would also
+# match container/skills/data/ from the lfontes-mono sync).
+/store/
+/data/
+/logs/
 
 # Nested git repos (LP code clones, knowledge base) — managed separately
 /shared/*/
@@ -48,10 +49,3 @@ groups/*/*
 .claude/scheduled_tasks.lock
 
 agents-sdk-docs
-
-# container/skills/ is populated by scripts/sync-shared-skills.ts from
-# lfontes-mono/skills/. The synced contents are gitignored — canonical
-# source is lfontes-mono. (If upstream ever adds tracked files under this
-# path, they'd remain tracked despite this rule — gitignore only affects
-# untracked files.)
-container/skills/*

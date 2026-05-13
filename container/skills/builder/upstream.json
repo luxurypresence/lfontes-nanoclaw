@@ -1,0 +1,31 @@
+{
+  "skill-creator": {
+    "repo": "anthropics/skills",
+    "path": "skills/skill-creator",
+    "target": "../skill-creator",
+    "branch": "main",
+    "commit": "b0cbd3df1533b396d281a6886d5132f623393a9c"
+  },
+  "evals-skills": {
+    "repo": "hamelsmu/evals-skills",
+    "path": ".",
+    "target": "../evals-skills",
+    "branch": "main",
+    "commit": "febdb335bd658a01f756b8b5b3364277a4fa6a4a"
+  },
+  "react-development": {
+    "repo": "TODO",
+    "path": "TODO",
+    "target": "references/react-development",
+    "branch": "main",
+    "commit": null
+  },
+  "tanstack-start": {
+    "repo": "TODO",
+    "path": "TODO",
+    "target": "references/tanstack-start",
+    "branch": "main",
+    "commit": null
+  },
+  "graphql-schema": null
+}
