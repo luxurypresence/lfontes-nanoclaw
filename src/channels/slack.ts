@@ -25,6 +25,24 @@ registerChannelAdapter('slack', {
       adapter: slackAdapter,
       concurrency: 'concurrent',
       supportsThreads: true,
+      // Top-level Slack DM messages arrive with an empty thread_ts (the
+      // adapter's intentional DM flattening at @chat-adapter/slack
+      // dist/index.js:1955). That collapses every top-level DM to one shared
+      // threadId, so per-thread session mode degenerates into one session
+      // forever. Rewrite to use the message ts so each top-level DM gets its
+      // own session AND Clanq's reply posts in-thread (postMessage decodes
+      // thread_ts from the threadId, and Slack auto-creates the thread).
+      // In-thread DM replies arrive with a real thread_ts → no rewrite needed.
+      rewriteThreadId: (threadId, message, { isDM }) => {
+        if (!isDM) return threadId;
+        try {
+          const decoded = slackAdapter.decodeThreadId(threadId);
+          if (decoded.threadTs) return threadId;
+          return slackAdapter.encodeThreadId({ channel: decoded.channel, threadTs: message.id });
+        } catch {
+          return threadId;
+        }
+      },
       // Slack only forwards the message Clanq was mentioned in. Without this
       // hook the agent has no view of the thread parent or earlier replies —
       // see chat-sdk-bridge.ts ChatSdkBridgeConfig.fetchThreadContext.

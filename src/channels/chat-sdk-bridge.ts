@@ -86,6 +86,15 @@ export interface ChatSdkBridgeConfig {
    * Return null/empty to skip seeding.
    */
   fetchThreadContext?: (threadId: string, message: ChatMessage) => Promise<unknown[] | null>;
+  /**
+   * Optional rewrite of the inbound threadId before session resolution. Lets a
+   * channel reinterpret what counts as a "thread". Slack uses this to give
+   * top-level DM messages (which the underlying adapter encodes with an empty
+   * thread_ts) a thread id keyed on the message ts — so each new top-level DM
+   * becomes its own per-thread session and Clanq's reply is posted in-thread.
+   * `isDM` mirrors the bridge's own dispatch (true only for onDirectMessage).
+   */
+  rewriteThreadId?: (threadId: string, message: ChatMessage, context: { isDM: boolean }) => string;
 }
 
 /**
@@ -250,37 +259,40 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
       // flag that routeInbound evaluates; the router calls back into
       // bridge.subscribe(...) when a mention-sticky wiring engages.
 
+      // Per-channel hook: rewrite the SDK's thread id before session resolution.
+      // See ChatSdkBridgeConfig.rewriteThreadId.
+      const rewrite = (threadId: string, message: ChatMessage, isDM: boolean): string =>
+        config.rewriteThreadId ? config.rewriteThreadId(threadId, message, { isDM }) : threadId;
+
       // Subscribed threads — every message in a thread we've previously
       // engaged. Carry the SDK's `message.isMention` through so mention-mode
       // wirings still fire on in-thread mentions.
       chat.onSubscribedMessage(async (thread, message) => {
-        const channelId = adapter.channelIdFromThreadId(thread.id);
-        await setupConfig.onInbound(
-          channelId,
-          thread.id,
-          await messageToInbound(message, message.isMention === true, true),
-        );
+        const tid = rewrite(thread.id, message, false);
+        const channelId = adapter.channelIdFromThreadId(tid);
+        await setupConfig.onInbound(channelId, tid, await messageToInbound(message, message.isMention === true, true));
       });
 
       // @mention in an unsubscribed thread — SDK-confirmed bot mention.
       chat.onNewMention(async (thread, message) => {
-        const channelId = adapter.channelIdFromThreadId(thread.id);
-        await setupConfig.onInbound(channelId, thread.id, await messageToInbound(message, true, true, true));
+        const tid = rewrite(thread.id, message, false);
+        const channelId = adapter.channelIdFromThreadId(tid);
+        await setupConfig.onInbound(channelId, tid, await messageToInbound(message, true, true, true));
       });
 
       // DMs — by definition addressed to the bot. Thread id flows through
       // so sub-thread context reaches delivery (Slack users can open threads
-      // inside a DM). Router collapses DM sub-threads to one session via
-      // is_group=0 short-circuit.
+      // inside a DM).
       chat.onDirectMessage(async (thread, message) => {
-        const channelId = adapter.channelIdFromThreadId(thread.id);
+        const tid = rewrite(thread.id, message, true);
+        const channelId = adapter.channelIdFromThreadId(tid);
         log.info('Inbound DM received', {
           adapter: adapter.name,
           channelId,
           sender: (message.author as any)?.fullName ?? (message.author as any)?.userId ?? 'unknown',
-          threadId: thread.id,
+          threadId: tid,
         });
-        await setupConfig.onInbound(channelId, thread.id, await messageToInbound(message, true, false));
+        await setupConfig.onInbound(channelId, tid, await messageToInbound(message, true, false));
       });
 
       // Plain messages in unsubscribed threads.
@@ -294,8 +306,9 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
       // so forwarding every one is cheap enough to not need a bridge-side
       // flood gate.
       chat.onNewMessage(/[\s\S]*/, async (thread, message) => {
-        const channelId = adapter.channelIdFromThreadId(thread.id);
-        await setupConfig.onInbound(channelId, thread.id, await messageToInbound(message, false, true, true));
+        const tid = rewrite(thread.id, message, false);
+        const channelId = adapter.channelIdFromThreadId(tid);
+        await setupConfig.onInbound(channelId, tid, await messageToInbound(message, false, true, true));
       });
 
       // Handle button clicks (ask_user_question)
