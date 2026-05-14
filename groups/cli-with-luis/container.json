@@ -37,7 +37,7 @@
     },
     {
       "hostPath": "/home/exedev/lfontes-mono/wiki",
-      "containerPath": "lfontes-mono/wiki",
+      "containerPath": "wiki",
       "readonly": false
     }
   ],

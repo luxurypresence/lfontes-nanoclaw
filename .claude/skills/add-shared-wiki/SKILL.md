@@ -1,11 +1,13 @@
 ---
 name: add-shared-wiki
-description: Wire the lfontes-mono wiki + skills tree into all nanoclaw agent groups. Mounts wiki/ into each container; copies a curated subset of lfontes-mono/skills/ into nanoclaw/container/skills/ via a sync script and whitelists them in each group's container.json. Triggers on "add shared wiki", "set up shared wiki", "wire lfontes-mono", "shared wiki", "global wiki", "wiki for all groups".
+description: Wire the lfontes-mono wiki + skills tree into all nanoclaw agent groups. Mounts wiki/ at /workspace/extra/wiki (neutral path — agent doesn't see the lfontes-mono name); copies a curated subset of lfontes-mono/skills/ into nanoclaw/container/skills/ via a sync script and whitelists them in each group's container.json. Triggers on "add shared wiki", "set up shared wiki", "wire lfontes-mono", "shared wiki", "global wiki", "wiki for all groups".
 ---
 
 # Add Shared Wiki
 
 Wire the wiki + a curated subset of skills from `~/lfontes-mono/{wiki,skills}` into every nanoclaw agent group. The wiki stays mounted RW for live capture; skills get **copied** into nanoclaw via a sync script and loaded via the standard `skills` whitelist in `container.json` — no fork patch.
+
+**Naming discipline.** Inside the container, the wiki is mounted at `/workspace/extra/wiki` (no `lfontes-mono` in the path) and reached via `$WIKI_ROOT`. The agent should not learn the wiki originates from a host repo called `lfontes-mono` — that name only confused Clanq into searching the wiki when asked about unrelated repo work. `$LFONTES_MONO_ROOT` is deliberately *not* set inside containers; it's a host-only convenience for skills that navigate the full lfontes-mono tree.
 
 ## What this builds
 
@@ -19,13 +21,12 @@ Wire the wiki + a curated subset of skills from `~/lfontes-mono/{wiki,skills}` i
 
 ~/nanoclaw/
   groups/<group>/container.json    # adds wiki mount + skills whitelist  (NEW)
-  groups/<group>/CLAUDE.local.md   # adds shared-knowledge pointer       (NEW)
   container/skills/<n>/            # SYNCED COPIES from lfontes-mono     (NEW, gitignored)
   scripts/sync-shared-skills.ts    # the sync script                     (already exists)
   .gitignore                       # add the synced skill dirs           (NEW)
 ```
 
-Each container sees only `lfontes-mono/wiki/` at `/workspace/extra/lfontes-mono/wiki/` (RW for capture). Skills load via the standard `~/.claude/skills/` mechanism from `nanoclaw/container/skills/`. `LFONTES_MONO_ROOT=/workspace/extra/lfontes-mono` is baked into the agent image so SKILL.md path resolution works (wiki references) without per-group env plumbing.
+Each container sees the wiki at `/workspace/extra/wiki/` (RW for capture). Skills load via the standard `~/.claude/skills/` mechanism from `nanoclaw/container/skills/`. `WIKI_ROOT=/workspace/extra/wiki` is baked into the agent image so SKILL.md path resolution works without per-group env plumbing.
 
 ## Preflight
 
@@ -37,7 +38,7 @@ test -d /home/exedev/lfontes-mono/skills/data                && echo OK || echo 
 test -L /home/exedev/lfontes-mono/.claude/skills/navigator   && echo OK || echo "expected .claude/skills/navigator to be a symlink — abort"
 test -d /home/exedev/nanoclaw                                && echo OK || echo "nanoclaw missing — abort"
 test -f /home/exedev/nanoclaw/scripts/sync-shared-skills.ts  && echo OK || echo "sync script missing — restore from git history"
-grep -q LFONTES_MONO_ROOT /home/exedev/nanoclaw/container/Dockerfile && echo OK || echo "Dockerfile missing LFONTES_MONO_ROOT ENV"
+grep -q "ENV WIKI_ROOT=" /home/exedev/nanoclaw/container/Dockerfile && echo OK || echo "Dockerfile missing WIKI_ROOT ENV"
 ```
 
 If any check fails, stop and explain. Each step below is idempotent — re-running on a partially-set-up install is safe.
@@ -98,12 +99,12 @@ For each of `clanq-dm`, `clanq-channels`, `cli-with-luis`:
    ```json
    {
      "hostPath": "/home/exedev/lfontes-mono/wiki",
-     "containerPath": "lfontes-mono/wiki",
+     "containerPath": "wiki",
      "readonly": false
    }
    ```
 
-   Container path is auto-prefixed with `/workspace/extra/`.
+   Container path is auto-prefixed with `/workspace/extra/`, so the wiki lands at `/workspace/extra/wiki/` — matching `$WIKI_ROOT`. Do not put `lfontes-mono` in the containerPath; the agent should not see the host repo name.
 
 2. Set `skills` to a whitelist of which lfontes-mono skills should load:
 
@@ -115,33 +116,24 @@ For each of `clanq-dm`, `clanq-channels`, `cli-with-luis`:
 
 Do NOT mount the whole lfontes-mono repo or `lfontes-mono/skills` — skills are now consumed by copy, not by mount.
 
-## Step 5 — Update lfontes-mono SKILL.md path resolution
+## Step 5 — Wiki references in canonical skills
 
-The current SKILL.md text says "All paths read live under `<lfontes-mono-root>` (resolved via `git rev-parse --git-common-dir` then `dirname`)." That works in host CC (cwd is in the repo) but not in the container (cwd is `/workspace`, not a git repo). Add the env-var fallback.
+Skills in `~/lfontes-mono/skills/<name>/SKILL.md` that point at wiki content should use `$WIKI_ROOT`:
 
-Edit `~/lfontes-mono/skills/navigator/SKILL.md` (and `data/SKILL.md` if it has the same rule):
+| Environment | `$WIKI_ROOT` resolves to |
+|-------------|-------------------------|
+| Inside nanoclaw container | `/workspace/extra/wiki` (set by Dockerfile ENV) |
+| Host Claude Code | unset by default — the git-fallback pattern `${WIKI_ROOT:-$(git rev-parse --git-common-dir 2>/dev/null \| xargs dirname)/wiki}` resolves to `~/lfontes-mono/wiki` when cwd is anywhere inside the repo |
 
-> Strict in-tree scope. All paths read live under `<lfontes-mono-root>`, resolved as `${LFONTES_MONO_ROOT:-$(git rev-parse --git-common-dir 2>/dev/null | xargs dirname)}`. Inside the nanoclaw container, the env var is set to `/workspace/extra/lfontes-mono`. Under host Claude Code, the env var is unset and the git fallback resolves to the lfontes-mono checkout.
+Skills that navigate the full lfontes-mono repo (e.g. navigator's repo-scope rules, `/repos/<name>` clones) keep using `$LFONTES_MONO_ROOT` with the same git-fallback. Inside the container these vars stay unset, so any reference goes inert — which is the correct outcome: the container shouldn't traverse the host monorepo.
 
-(The wiki lives at `$LFONTES_MONO_ROOT/wiki/` via the mount; navigator's `repos/<name>` clones live at `$LFONTES_MONO_ROOT/repos/<name>` via the host filesystem — note: nanoclaw doesn't currently mount `repos/`, so navigator can read its own SKILL.md but can't traverse repos from within the container yet.)
+The split:
+- `$WIKI_ROOT/...` — wiki content, works in both environments
+- `$LFONTES_MONO_ROOT/...` — host-only navigation, breaks loud inside the container
 
-After editing, commit in lfontes-mono — the synced copy in nanoclaw stays stale until next `pnpm tsx scripts/sync-shared-skills.ts`.
+After editing the canonical sources, commit in lfontes-mono — the synced copy in nanoclaw stays stale until next `pnpm tsx scripts/sync-shared-skills.ts`.
 
-## Step 6 — CLAUDE.local.md hooks per group
-
-For each of `clanq-dm`, `clanq-channels`, `cli-with-luis`, append to `groups/<group>/CLAUDE.local.md`:
-
-```markdown
-## Shared knowledge (lfontes-mono)
-
-`$LFONTES_MONO_ROOT` points to the shared wiki (mounted RW). Start with `$LFONTES_MONO_ROOT/wiki/index.md` for the content catalog; the rest is discoverable.
-
-Writes leave the working tree dirty — Luis reviews and commits manually.
-```
-
-Subfolder layout is auto-discoverable from `wiki/index.md` and `ls`.
-
-## Step 7 — Build, restart, verify
+## Step 6 — Build, restart, verify
 
 ```bash
 cd /home/exedev/nanoclaw
@@ -151,16 +143,19 @@ launchctl kickstart -k gui/$(id -u)/com.nanoclaw                       # macOS
 # systemctl --user restart nanoclaw-v2-<install-hash>.service          # Linux user unit
 ```
 
-Verify in a fresh session in any group:
+Verify in a fresh session inside any group:
 
 ```
-echo $LFONTES_MONO_ROOT                                # /workspace/extra/lfontes-mono
-ls $LFONTES_MONO_ROOT/                                 # wiki only (skills not mounted)
+echo $WIKI_ROOT                                        # /workspace/extra/wiki
+echo $LFONTES_MONO_ROOT                                # (empty — not set inside containers)
+ls $WIKI_ROOT/                                         # wiki content
 ls ~/.claude/skills/                                   # navigator, data, work (whitelisted)
 readlink ~/.claude/skills/navigator                    # /app/skills/navigator (the synced copy)
 ls ~/.claude/skills/navigator/references/              # access-paths.md, patterns.md, tools.md
-cat $LFONTES_MONO_ROOT/wiki/index.md                   # content catalog
+cat $WIKI_ROOT/index.md                                # content catalog
 ```
+
+Skill resolution on the host (running Claude Code outside the container) relies on the git-fallback pattern in the SKILL.md files themselves — no shell rc edits required as long as cwd is somewhere inside `~/lfontes-mono`.
 
 ## Refresh workflow
 
@@ -184,4 +179,4 @@ cd /home/exedev/nanoclaw && pnpm tsx scripts/sync-shared-skills.ts
 
 ## Post-install
 
-If a new agent group gets created later, re-run this skill — Steps 4 and 6 are idempotent. Steps 1, 2, 3, 5 detect their work is done and skip.
+If a new agent group gets created later, re-run this skill — Step 4 (the per-group container.json work) is idempotent. Steps 1, 2, 3, 5 detect their work is done and skip.

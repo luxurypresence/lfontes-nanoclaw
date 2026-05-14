@@ -78,12 +78,14 @@ ENV GH_PROMPT_DISABLED=1
 # navigator skill resolves clone paths through it without per-group env plumbing.
 ENV REPOS_ROOT=/workspace/extra/shared
 
-# Shared knowledge layer mounted by groups that wire it up
-# (see groups/<group>/container.json additionalMounts for /workspace/extra/lfontes-mono).
-# Set unconditionally so navigator/data SKILL.md can resolve <lfontes-mono-root>
-# without any host-side env plumbing. Groups that don't mount lfontes-mono
-# simply won't have content at this path — same effect as the var being unset.
-ENV LFONTES_MONO_ROOT=/workspace/extra/lfontes-mono
+# Shared wiki layer mounted by groups that wire it up
+# (see groups/<group>/container.json additionalMounts for /workspace/extra/wiki).
+# Set unconditionally so skill prose can resolve $WIKI_ROOT without per-group env
+# plumbing. Groups that don't mount the wiki simply won't have content at this
+# path — same effect as the var being unset. Deliberately does NOT carry the
+# host-side repo name (lfontes-mono): the container shouldn't model the wiki as
+# part of any host repo, just as a knowledge mount.
+ENV WIKI_ROOT=/workspace/extra/wiki
 
 # ---- Bun runtime -------------------------------------------------------------
 # Install via the official script (handles multi-arch detection), then move
