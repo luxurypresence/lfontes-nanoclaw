@@ -254,7 +254,7 @@ function buildMounts(
 
   // Sync skill symlinks based on container.json selection before mounting.
   const claudeDir = path.join(DATA_DIR, 'v2-sessions', agentGroup.id, '.claude-shared');
-  syncSkillSymlinks(claudeDir, containerConfig);
+  syncSkillSymlinks(claudeDir, containerConfig, agentGroup.id);
 
   // Compose CLAUDE.md fresh every spawn from the shared base, enabled skill
   // fragments, and MCP server instructions. See `claude-md-compose.ts`.
@@ -339,7 +339,11 @@ function buildMounts(
  * selection. Each symlink points to a container path (/app/skills/<name>)
  * so it's dangling on the host but valid inside the container.
  */
-function syncSkillSymlinks(claudeDir: string, containerConfig: import('./container-config.js').ContainerConfig): void {
+function syncSkillSymlinks(
+  claudeDir: string,
+  containerConfig: import('./container-config.js').ContainerConfig,
+  agentGroupId: string,
+): void {
   const skillsDir = path.join(claudeDir, 'skills');
   if (!fs.existsSync(skillsDir)) {
     fs.mkdirSync(skillsDir, { recursive: true });
@@ -362,6 +366,14 @@ function syncSkillSymlinks(claudeDir: string, containerConfig: import('./contain
       : [];
   } else {
     desired = containerConfig.skills;
+  }
+
+  // When cli_scope is disabled, hide the ncl-cli skill entirely — the
+  // agent shouldn't learn the CLI exists. The dispatcher rejects the call
+  // either way, but excluding the skill keeps the system prompt clean.
+  const cfgRow = getContainerConfig(agentGroupId);
+  if (cfgRow?.cli_scope === 'disabled') {
+    desired = desired.filter((s) => s !== 'ncl-cli');
   }
 
   const desiredSet = new Set(desired);

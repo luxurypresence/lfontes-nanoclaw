@@ -4,7 +4,6 @@
  * Replaces the per-group "written once at init, owned by the group" pattern
  * with a host-regenerated entry point that imports:
  *   - a shared base (`container/CLAUDE.md` mounted RO at `/app/CLAUDE.md`)
- *   - optional per-skill fragments (skills that ship `instructions.md`)
  *   - optional per-MCP-server fragments (inline `instructions` field in
  *     `container.json`)
  *   - per-group agent memory (`CLAUDE.local.md`, auto-loaded by Claude Code)
@@ -26,7 +25,6 @@ import type { AgentGroup } from './types.js';
 // Symlink targets are container paths — dangling on host (hence the readlink
 // dance instead of existsSync), valid inside the container via RO mounts.
 const SHARED_CLAUDE_MD_CONTAINER_PATH = '/app/CLAUDE.md';
-const SHARED_SKILLS_CONTAINER_BASE = '/app/skills';
 const SHARED_MCP_TOOLS_CONTAINER_BASE = '/app/src/mcp-tools';
 
 // Host-side source paths used to discover fragment sources at compose time.
@@ -61,33 +59,26 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
     : {};
   const desired = new Map<string, { type: 'symlink' | 'inline'; content: string }>();
 
-  // Skill fragments — every skill that ships an `instructions.md`.
-  // TODO (shared-source refactor): respect `container.json` skill selection.
-  const skillsHostDir = path.join(process.cwd(), 'container', 'skills');
-  if (fs.existsSync(skillsHostDir)) {
-    for (const skillName of fs.readdirSync(skillsHostDir)) {
-      const hostFragment = path.join(skillsHostDir, skillName, 'instructions.md');
-      if (fs.existsSync(hostFragment)) {
-        desired.set(`skill-${skillName}.md`, {
-          type: 'symlink',
-          content: `${SHARED_SKILLS_CONTAINER_BASE}/${skillName}/instructions.md`,
-        });
-      }
-    }
-  }
+  // Skills are not composed into CLAUDE.md. Each container skill is
+  // already symlinked into `.claude/skills/<name>` (see `syncSkillSymlinks`
+  // in `container-runner.ts`), so the Agent SDK auto-discovers it via the
+  // standard skill path: the SKILL.md name + description go into the skill
+  // list at session start, and the body loads on demand when the model
+  // invokes the Skill tool. Baking a separate `instructions.md` into the
+  // always-loaded CLAUDE.md defeats the lazy-loading the skills system
+  // was designed for.
 
   // Built-in module fragments — every MCP tool source file that ships a
-  // sibling `<name>.instructions.md`. These describe how the agent should
-  // use that module's MCP tools (schedule_task, install_packages, etc.).
-  // Skip cli.instructions.md when cli_scope is disabled.
-  const cliDisabled = configRow?.cli_scope === 'disabled';
+  // sibling `<name>.instructions.md`. Only `core` ships one today — its
+  // content (message-block syntax, send_message pacing) is genuinely
+  // every-turn relevant. Other module instructions live in on-demand
+  // container skills (`task-scheduling`, `companion-agents`, etc.).
   const mcpToolsHostDir = path.join(process.cwd(), MCP_TOOLS_HOST_SUBPATH);
   if (fs.existsSync(mcpToolsHostDir)) {
     for (const entry of fs.readdirSync(mcpToolsHostDir)) {
       const match = entry.match(/^(.+)\.instructions\.md$/);
       if (!match) continue;
       const moduleName = match[1];
-      if (moduleName === 'cli' && cliDisabled) continue;
       desired.set(`module-${moduleName}.md`, {
         type: 'symlink',
         content: `${SHARED_MCP_TOOLS_CONTAINER_BASE}/${entry}`,
