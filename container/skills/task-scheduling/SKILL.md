@@ -1,4 +1,9 @@
-## Task scheduling (`schedule_task`)
+---
+name: task-scheduling
+description: Schedule, list, update, pause, resume, or cancel recurring tasks via the NanoClaw MCP tools (`schedule_task`, `list_tasks`, `update_task`, `cancel_task`, `pause_task`, `resume_task`). Use when the user asks to set up a recurring or scheduled job, or wants to inspect/modify existing scheduled tasks. Covers the pre-task `script` hook for credit-conscious filtering.
+---
+
+# Task scheduling (`schedule_task`)
 
 For any recurring task, use `schedule_task`. This is the scheduling path — tasks persist across sessions and restarts, and support the pre-task `script` hook described below.
 
@@ -6,7 +11,7 @@ To inspect or change existing tasks, use `list_tasks` (returns one row per serie
 
 Frequent recurring scheduled tasks — more than a few times a day — consume API credits and can risk account restrictions. You can add a `script` that runs first, and you will only be called when the check passes.
 
-### How it works
+## How it works
 
 1. Provide a bash `script` alongside the `prompt` when scheduling
 2. When the task fires, the script runs first
@@ -14,7 +19,7 @@ Frequent recurring scheduled tasks — more than a few times a day — consume A
 4. If `wakeAgent: false` — nothing happens, task waits for next run
 5. If `wakeAgent: true` — claude receives the script's data + prompt and handles
 
-### Always test your script first
+## Always test your script first
 
 Before scheduling, run the script directly to verify it works:
 
@@ -26,11 +31,11 @@ bash -c 'node --input-type=module -e "
 "'
 ```
 
-### When NOT to use scripts
+## When NOT to use scripts
 
 If a task requires your judgment every time (daily briefings, reminders, reports), skip the script — just use a regular prompt. Do not attempt to do things like sentiment analysis or advanced nlp in scripts.
 
-### Frequent task guidance
+## Frequent task guidance
 
 If a user wants a task to run more than a few times a day and a script can't be used:
 

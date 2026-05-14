@@ -5,24 +5,21 @@
       "args": [
         "https://app.mintmcp.com/o/luxury-presence/s/auggie-prd-api/mcp"
       ],
-      "env": {},
-      "instructions": "Auggie is LP's AI engineering assistant. Tools: `ask_auggie` (submit task \u2192 returns taskId/conversationId), `get_task_status` (poll for result; pending/running/completed). Async only \u2014 wait 15-30s between polls. Most tasks complete in 1-3 min. See the auggie skill (auto-loads on triggers) for prompt-crafting and follow-up patterns."
+      "env": {}
     },
     "linear": {
       "command": "mcp-remote",
       "args": [
         "https://mcp.linear.app/mcp"
       ],
-      "env": {},
-      "instructions": "Linear is LP's issue tracker. The MCP server exposes the standard Linear tools (issues, projects, teams, comments, status updates, labels, cycles). For `clanq-channels`, your access level is governed by which Linear API key OneCLI injects \u2014 full access for cli-with-luis and clanq-dm; read-only for clanq-channels (write attempts will 401/403). When citing tickets, prefer the Linear ID (e.g. `ENG-1234`) plus a one-line title."
+      "env": {}
     },
     "notion": {
       "command": "mcp-remote",
       "args": [
         "https://app.mintmcp.com/o/luxury-presence/s/com-notion-mcp/mcp"
       ],
-      "env": {},
-      "instructions": "Notion is LP's docs / wiki / planning surface. The MCP server exposes Notion tools (search pages/databases, query, create-page, update-page, append-block, etc.). Routed through MintMCP \u2014 auth + page-permission scope is configured server-side at the MintMCP gateway, not here. When citing Notion content, prefer page title + a permalink so the reader can verify."
+      "env": {}
     }
   },
   "packages": {

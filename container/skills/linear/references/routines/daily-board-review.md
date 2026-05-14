@@ -24,9 +24,9 @@ Team: `<team>` · Threshold: <N> days · Stale issues: <N>
 
 ### <Assignee>
 
-| ID | Title | Status | Days idle | Last comment |
-| -- | ----- | ------ | --------- | ------------ |
-| ENG-1234 | … | In Progress | 21 | luis (2026-04-16) |
+| ID       | Title | Status      | Days idle | Last comment      |
+| -------- | ----- | ----------- | --------- | ----------------- |
+| ENG-1234 | …     | In Progress | 21        | luis (2026-04-16) |
 ```
 
 If zero stale, output one line: `Board is healthy — no issues idle > <threshold> days.`

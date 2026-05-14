@@ -1,11 +1,11 @@
 ---
 name: linear
-description: Slim base for Linear at LP — label / status conventions, canonical operations, escalation routing. Referenced by `clanq-tickets` (Clanq's planning system) and future team-board skills. Tool overview, MCP tools, and access policy live in the `mcp-linear` system fragment. Trigger phrases: "linear basics", "how should I label this", "linear conventions", "linear status", "linear operations".
+description: Base for Linear at LP — tool overview, access policy, label / status conventions, canonical operations, escalation routing. Referenced by `tickets` (persistent planning + work-tracking) and future team-board skills. Trigger phrases: "linear basics", "how should I label this", "linear conventions", "linear status", "linear operations", "create linear ticket", "update linear issue".
 ---
 
-# Role
+# Tools and access
 
-Conventions and canonical-operation reference for Linear at LP. The `mcp-linear` system fragment (always loaded, when present) covers the tool overview and access policy; this skill covers how to use Linear well.
+Linear is LP's issue tracker. The MCP server exposes the standard Linear tools (issues, projects, teams, comments, status updates, labels, cycles). Access level is governed by which Linear API key OneCLI injects per channel — write attempts under a read-only key will return 401/403. When citing tickets, prefer the Linear ID (e.g. `ENG-1234`) plus a one-line title.
 
 # Conventions
 
@@ -14,6 +14,14 @@ Conventions and canonical-operation reference for Linear at LP. The `mcp-linear`
 - Sub-issues — parent holds the high-level plan; sub-issues hold concrete work.
 - Blocked-by — set explicitly; ready queues depend on it.
 - Attachments — paste source URLs (chat thread, Notion page, PR) as Linear attachments, not buried in description prose.
+
+# Writing tickets
+
+Tickets stand alone. The reader doesn't have your worktree, your QA report, or your terminal scrollback.
+
+- Inline the repro, severity, and acceptance criteria in the ticket body. Don't write "see RESEARCH.md" or "see the QA report" — the engineer can't open them.
+- Cite code with GitHub URLs (`https://github.com/luxurypresence/<repo>/blob/<branch>/<path>#L<line>`) pinned to the repo's default branch. Relative paths (`repos/...`, `wiki/...`, `plans/...`) don't render in Linear.
+- Attach canonical sources (PR, public Notion page) when they add what inline text can't.
 
 # Canonical operations
 
@@ -34,10 +42,9 @@ If a write returns 401/403, the channel doesn't have a write-capable key for tha
 
 # Routing
 
-- "Track work / plan a project Clanq is doing" → `clanq-tickets` skill.
+- "Track work / plan a project" → `tickets` skill.
 - "Manage / review someone else's team board" → (future) team-board skill. The only piece that exists today is `references/routines/daily-board-review.md` — a daily stale-work survey, parameterized by `$LINEAR_REVIEW_TEAM`.
 
 # Related
 
-- `clanq-tickets` skill — Clanq's planning + work-tracking, layered on this base.
-- `mcp-linear` system fragment (in each Clanq group) — tool overview, access policy.
+- `tickets` skill — persistent planning + work-tracking, layered on this base.
