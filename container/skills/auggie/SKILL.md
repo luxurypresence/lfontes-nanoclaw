@@ -1,6 +1,6 @@
 ---
 name: auggie
-description: Delegate tasks to Auggie, LP's AI engineering assistant. Use for codebase investigation, database queries, product knowledge, Linear ticket operations, Slack search, feature flag lookups, and any LP-ecosystem question during PRD research or general workflows.
+description: Delegate codebase, data, and product questions to Auggie, LP's AI engineering assistant. Use as an escape hatch when local sources don't answer.
 argument-hint: '[anatomy | anatomy refresh]'
 ---
 

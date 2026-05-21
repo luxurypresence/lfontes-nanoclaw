@@ -1,6 +1,6 @@
 ---
 name: skills-manager
-description: Use whenever creating, editing, or planning a skill in `skills/<name>/`. Use even for tiny edits — a one-line tweak, a description change, a rename. Use also when proposing a new skill, picking a name, or planning structure before any files exist. Skip edits to `wiki/`, `plans/`, or anything outside `skills/`. For eval-driven workflows (running test prompts against a skill, packaging a `.skill`, optimizing a description with the eval loop), use `skill-creator` instead.
+description: Conventions for authoring skills under `skills/<name>/`. Use when creating, editing, or planning a skill. For eval-driven workflows (test prompts, `.skill` packaging, description optimization), use `skill-creator` instead.
 paths: skills/**/*.md
 ---
 
@@ -32,15 +32,16 @@ For structural questions (section order, frontmatter shape, Context table format
 
 # Description (frontmatter)
 
-The `description` field is the primary triggering mechanism — Claude reads it to decide whether to load the skill. Optimize for triggering, not for explaining internals.
+The `description` is the primary triggering mechanism. Optimize for signal — a 30-word description is as correct as a 150-word one when every clause is doing work.
 
-- Lead with the key use case. Combined `description` + `when_to_use` is capped at 1,536 characters in the skill listing.
-- Include the natural phrases a user would actually say, even when they don't name the skill or its outputs.
-- Be a little pushy. "Use whenever the user does X" beats "consider using this for X" — Claude tends to under-trigger skills.
-- Keep implementation details out (folder layout, template names, internal section labels). Those belong in the body, which loads on trigger.
-- Cover the negative case briefly when it's easy to confuse — what does _not_ warrant the skill.
+- Capability sentence in user vocabulary.
+- `Use when …` clause with the phrases users actually say. Skip when the skill's name is itself the trigger.
+- Optional negative case when there's a confusable sibling.
+- No internal implementation details (schema names, table lists, section labels, transport mechanism, folder layout) — those belong in the body.
 
-Spec: https://code.claude.com/docs/en/skills (frontmatter table), https://agentskills.io.
+Reference shapes: `github.com/anthropics/skills` — `webapp-testing` (short), `docx` / `xlsx` (long with trigger lists + negative case).
+
+Spec: https://code.claude.com/docs/en/skills, https://agentskills.io.
 
 # Voice
 
@@ -57,7 +58,7 @@ Spec: https://code.claude.com/docs/en/skills (frontmatter table), https://agents
 - Say it once. No concept appears in two sections.
 - No process scaffolding the model would do anyway. Procedural steps only where sequence is non-obvious or encodes a hand-off.
 - Examples only when the example is the rule (a template the consumer copies) or teaches a shape no prose could specify shorter. No paired anti-pattern/correct-pattern blocks.
-- Describe operations and capabilities ("run a code-review pass"), not harness primitives (tool names, plugin IDs, agent types). Use skill-relative paths and `wiki/...` paths so the skill reads identically on any AgentSkills-compatible harness.
+- Default to operations and capabilities ("run a code-review pass"). When a skill invokes harness-specific functionality with no neutral equivalent — Claude Code agent teams, named reviewers from a plugin, MCP tool handles — name it directly and label the section as harness-specific (e.g. "in Claude Code: …") so other harnesses can skip cleanly. Skill-relative paths and `wiki/...` paths apply uniformly.
 
 # Self-audit
 

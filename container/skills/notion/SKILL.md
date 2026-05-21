@@ -1,6 +1,6 @@
 ---
 name: notion
-description: Use Notion via MCP — LP's docs / wiki / planning surface. Use when reading or creating Notion pages, searching docs, querying databases, or citing internal documentation. Trigger phrases: "notion", "wiki", "internal docs", "lp docs", "create a page", "update a page".
+description: Read, search, and create Notion pages — LP's docs surface.
 ---
 
 # Notion at LP

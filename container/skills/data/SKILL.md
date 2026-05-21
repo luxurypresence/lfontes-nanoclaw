@@ -1,6 +1,6 @@
 ---
 name: data
-description: Use this skill PROACTIVELY for any data question against LP production — SQL queries against `lp_core_production`, table/column lookups for LP's `core` / `identity` / `buyerseller` / `ops` / `website` / `property` schemas, or DBT mart knowledge from the `analytics-dbt` repo. Even if the user just says "check the database" or "look that up", use this skill. Trigger phrases: "how many contacts/tasks/companies", "find affected rows", "query LP", "production DB", "smart actions SQL", "DBT mart", "analytics-dbt", "Snowflake LAKE_LUXURY".
+description: Answer questions about LP data — counts, lookups, SQL queries, schema, DBT marts. Read-only.
 ---
 
 # Role
@@ -14,7 +14,7 @@ Read-only data agent for LP production. Routes a question to the fastest backend
 | `references/access-paths.md`     | Picking a backend (lp-psql / Snowflake / Hex / Auggie). Has `lp-psql` flags and env overrides.                                                                                                                          |
 | `wiki/data/core-schemas.md`      | Tables, columns, JSONB shapes, enum quirks, join rules per schema.                                                                                                                                                      |
 | `wiki/data/queries/`             | Canonical, runnable `.sql` files for recurring operational lookups (smart actions count, entitlements, websites by status, etc.). Bind via `lp-psql -v name=value -f`. See `wiki/data/queries/README.md` for the index. |
-| `wiki/data/query-patterns.md`    | SQL **shapes** that need adapting per use — affected-rows, JSONB discovery, latest-row, event-store two-step, cross-table matrix.                                                                                       |
+| `wiki/data/query-patterns.md`    | SQL shapes that need adapting per use — affected-rows, JSONB discovery, latest-row, event-store two-step, cross-table matrix.                                                                                           |
 | `wiki/data/gotchas.md`           | Deprecated tables, broken columns, enum casts. Skim once per session.                                                                                                                                                   |
 | `wiki/data/analytics-anatomy.md` | `analytics-dbt` repo map — marts, macros, sources, `.claude` assets.                                                                                                                                                    |
 | `wiki/last-check.json`           | Source-repo state for derived wiki artifacts. Read `repos.analytics-dbt` for the SHA `wiki/data/analytics-anatomy.md` reflects.                                                                                         |

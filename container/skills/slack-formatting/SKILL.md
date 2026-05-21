@@ -1,94 +1,71 @@
 ---
 name: slack-formatting
-description: Format messages for Slack using mrkdwn syntax. Use when responding to Slack channels (folder starts with "slack_" or JID contains slack identifiers).
+description: Format messages for Slack. Load before drafting any message that will be delivered to a Slack destination — covers what survives the Chat SDK markdown→Slack conversion, what to use (tables, lists, mentions), and what to avoid (headings, horizontal rules).
 ---
 
-# Slack Message Formatting (mrkdwn)
+# Slack Message Formatting
 
-When responding to Slack channels, use Slack's mrkdwn syntax instead of standard Markdown.
+## How it works
 
-## How to detect Slack context
+Write **standard markdown.** The Slack Chat SDK adapter parses what you write and converts it to whatever Slack actually expects — so:
 
-Check your group folder name or workspace path:
-- Folder starts with `slack_` (e.g., `slack_engineering`, `slack_general`)
-- Or check `/workspace/group/` path for `slack_` prefix
+- Inline styles (bold, italic, strike, inline code, code blocks, blockquotes, links) are translated automatically.
+- The **first** markdown table in a message becomes a native Slack table block. Any additional tables in the same message fall back to ASCII inside a code block.
+- Bare `@username` mentions are resolved against the workspace and rewritten to user IDs.
 
-## Formatting reference
+Don't try to write Slack-native syntax by hand (`*single asterisks*`, `<url|label>` links, etc.). The adapter expects markdown going in — some Slack-native forms get mangled by its preprocessing.
 
-### Text styles
+## What to write
 
-| Style | Syntax | Example |
-|-------|--------|---------|
-| Bold | `*text*` | *bold text* |
-| Italic | `_text_` | _italic text_ |
-| Strikethrough | `~text~` | ~strikethrough~ |
-| Code (inline) | `` `code` `` | `inline code` |
-| Code block | ` ```code``` ` | Multi-line code |
+| Feature | Write this |
+|---|---|
+| Bold | `**bold**` |
+| Italic | `_italic_` |
+| Strikethrough | `~~strike~~` |
+| Inline code | `` `code` `` |
+| Code block | ` ```lang\n...\n``` ` |
+| Link (named) | `[text](https://...)` |
+| Link (bare) | `https://example.com` |
+| Blockquote | `> quoted line` |
+| Bulleted list | `- item` |
+| Numbered list | `1. step` |
+| Table (one per message) | `\| col \| col \|`<br>`\|---\|---\|`<br>`\| a \| b \|` |
+| User mention | `@luisfontes` (resolved) or `<@U0AELNA1HUZ>` (raw) |
+| Channel mention | `<#C12345\|name>` |
+| Notify here / channel | `<!here>` / `<!channel>` |
+| Emoji | `:tada:` |
 
-### Links and mentions
+### Tables — use them for numbers
 
-```
-<https://example.com|Link text>     # Named link
-<https://example.com>                # Auto-linked URL
-<@U1234567890>                       # Mention user by ID
-<#C1234567890>                       # Mention channel by ID
-<!here>                              # @here
-<!channel>                           # @channel
-```
+Prefer a small markdown table over a flat bullet list whenever you're showing numbers, counts, dates, or anything two-dimensional. The first table per message becomes a real Slack table — sortable columns, aligned cells. Right-align numeric columns with `---:` in the header separator.
 
-### Lists
+Keep tables small. If it doesn't fit on one screen, it belongs in a Notion doc, not a Slack message — and only **one** table per message renders natively, so don't pile them on.
 
-Slack supports simple bullet lists but NOT numbered lists:
+## What does NOT work
 
-```
-• First item
-• Second item
-• Third item
-```
-
-Use `•` (bullet character) or `- ` or `* ` for bullets.
-
-### Block quotes
-
-```
-> This is a block quote
-> It can span multiple lines
-```
-
-### Emoji
-
-Use standard emoji shortcodes: `:white_check_mark:`, `:x:`, `:rocket:`, `:tada:`
-
-## What NOT to use
-
-- **NO** `##` headings (use `*Bold text*` for headers instead)
-- **NO** `**double asterisks**` for bold (use `*single asterisks*`)
-- **NO** `[text](url)` links (use `<url|text>` instead)
-- **NO** `1.` numbered lists (use bullets with numbers: `• 1. First`)
-- **NO** tables (use code blocks or plain text alignment)
-- **NO** `---` horizontal rules
-
-## Example message
-
-```
-*Daily Standup Summary*
-
-_March 21, 2026_
-
-• *Completed:* Fixed authentication bug in login flow
-• *In Progress:* Building new dashboard widgets
-• *Blocked:* Waiting on API access from DevOps
-
-> Next sync: Monday 10am
-
-:white_check_mark: All tests passing | <https://ci.example.com/builds/123|View Build>
-```
+- **Headings** (`#`, `##`): rendered as literal `#` text. Use a `**Bold label**` line instead.
+- **Horizontal rules** (`---`): rendered as literal `---`. Just use a blank line.
+- **Nested lists past ~2 levels**: visually noisy in Slack. Flatten or split.
 
 ## Quick rules
 
-1. Use `*bold*` not `**bold**`
-2. Use `<url|text>` not `[text](url)`
-3. Use `•` bullets, avoid numbered lists
-4. Use `:emoji:` shortcodes
-5. Quote blocks with `>`
-6. Skip headings — use bold text instead
+1. Write standard markdown — the adapter converts.
+2. Use a table for numbers/comparisons; one table per message renders natively.
+3. `[text](url)` for named links (not `<url|text>` — that gets stripped on the way in).
+4. `@username` for mentions; the adapter resolves it.
+5. No headings, no horizontal rules — use bold labels and blank lines.
+
+## Example
+
+````
+**PR queue** — *as of 14:02*
+
+| Repo     | PRs open | Mine |
+|----------|---------:|-----:|
+| crm-web  |       12 |    3 |
+| contacts |        8 |    2 |
+
+Top of the queue: [crm-web#4421](https://github.com/lp/crm-web/pull/4421) — waiting on review from @arianna since Friday.
+
+> Reminder: I won't ping the channel about this again unless asked.
+````

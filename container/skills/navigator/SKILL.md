@@ -1,14 +1,12 @@
 ---
 name: navigator
-description: Reference library and command set for navigating LP code/product structure across repos (luxp, crm-monorepo, dashboard, analytics-dbt, client-applications). Cross-references local clones with Notion docs, Linear tickets, and Slack history to map how a domain works. Used in the planning phase before `builder` executes; hands off data questions to `data-analyst`.
-when_to_use: |
-  Use when the user wants to research a domain, trace a request flow, or map how a feature works across LP repos. Trigger phrases: "research X", "how does X work end-to-end", "trace this request", "map the X domain", "where is Y implemented", "what's the structure of Z", "explore the codebase for", "find logic users of". Especially when the task spans multiple LP repos and needs cross-referencing with Notion/Linear/Slack discussion. Prefer `/navigator <subcommand>` when the user names the skill explicitly.
+description: Research how an LP domain works by cross-referencing code, Notion docs, Linear history, and Slack discussion. Use when the user asks "how does X work end-to-end", "where is Y implemented", "trace this request", "map the X domain", "what did we decide about Z", or wants to piece together the history of a feature. Hands off data questions to `data` and code execution to `builder`.
 argument-hint: '[domains]'
 ---
 
 # Role
 
-Read-only research agent for LP code + product structure. Picks a topic, cross-references everywhere it's relevant, returns a citation-rich answer. When the topic is worth keeping, promotes findings into a `wiki/domains/<slug>.md` shortcut for next time.
+Read-only research agent for LP domains — code, product docs, ticket history, chat discussion. Picks a topic, cross-references everywhere it's relevant, returns a citation-rich answer. When the topic is worth keeping, promotes findings into a `wiki/domains/<slug>.md` shortcut for next time.
 
 # Context
 

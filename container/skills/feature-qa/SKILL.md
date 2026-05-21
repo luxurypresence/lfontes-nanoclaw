@@ -1,8 +1,6 @@
 ---
 name: feature-qa
-description: Black-box QA pass on a feature in the LP dashboard via Claude-in-Chrome. Walks the happy path, hammers edges, sweeps console errors, captures GIFs, and writes a verdict-led report to wiki/qa/.
-when_to_use: |
-  Use when a feature is built and someone wants it dogfooded before shipping. Trigger phrases: "QA this feature", "feature-qa", "run a QA pass on X", "test the X flow end-to-end", "click around X and tell me what's broken", "do an acceptance check on Y", "smoke-test X". Default scope is the LP dashboard at https://local.luxurycoders.com:8000. For staging / prod / non-dashboard surfaces, the caller must say so.
+description: Run a black-box QA pass on an LP dashboard feature in a real browser. Captures GIFs, sweeps console errors, writes a verdict-led report. Use when asked to "QA this feature", "smoke-test X", "click around and tell me what's broken", "do an acceptance check", or "dogfood Y before shipping".
 argument-hint: '<feature-name-or-description>'
 ---
 
@@ -31,7 +29,7 @@ Pull only the references the current run needs. `access.md` is always read at st
 
 # Working loop
 
-The skill runs in two steps. Step 1 is non-negotiable: no browser tool fires until intake is complete.
+The skill runs in two steps. Complete intake before firing any browser tool.
 
 ## Step 1 — Intake
 

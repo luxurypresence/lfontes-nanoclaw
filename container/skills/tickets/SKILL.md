@@ -1,6 +1,6 @@
 ---
 name: tickets
-description: Use whenever the user starts non-trivial work — a multi-step task, an investigation, a build, a refactor, a research question, or anything that could span turns or sessions. Opens a Linear ticket on team `CLQ` so the plan and progress survive context loss, and routes long-running drafts into `plans/`. Use even when the user doesn't say "ticket" out loud: phrases like "let's plan", "investigate X", "build X", "research X", "refactor", "implement", "design Y", "look into Z", "track this", "what am I working on", and "resume <project>" all warrant a ticket. Also use when asked what's open, in flight, or to pick up previous work. Skip for one-shot Q&A, single-file edits, and quick lookups answerable in a single read.
+description: Open and track a Linear ticket on team `CLQ` for any non-trivial work — investigations, builds, refactors, multi-step plans — so the plan survives context loss. Skip for one-shot Q&A, single-file edits, and quick lookups.
 ---
 
 # Role
@@ -25,7 +25,7 @@ Pull only the type file the current work needs.
 
 Open a ticket before starting work that matches any of:
 
-- Would plan with `TaskCreate` / TodoWrite at 3+ items.
+- Would plan with an in-turn task list at 3+ items (Claude Code: `TaskCreate` / TodoWrite).
 - Spans multiple files, packages, or repos.
 - Is an investigation rather than a one-shot lookup.
 - Likely to span sessions, or could be resumed later.
@@ -33,7 +33,7 @@ Open a ticket before starting work that matches any of:
 
 Don't open a ticket for: one-shot Q&A, single-file edits, lookups answered in a single query or read, fixes you can describe in one sentence. When in doubt, open one — cheap to close quickly.
 
-`TaskCreate` / TodoWrite handles the in-turn checklist inside a ticket's execution — tickets are the durable layer, `TaskCreate` is the live one.
+The harness's in-turn task list handles the live checklist inside a ticket's execution — tickets are the durable layer (in Claude Code: `TaskCreate` / TodoWrite).
 
 # Rules
 

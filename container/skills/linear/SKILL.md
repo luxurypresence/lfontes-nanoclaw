@@ -1,6 +1,6 @@
 ---
 name: linear
-description: Base for Linear at LP — tool overview, access policy, label / status conventions, canonical operations, escalation routing. Referenced by `tickets` (persistent planning + work-tracking) and future team-board skills. Trigger phrases: "linear basics", "how should I label this", "linear conventions", "linear status", "linear operations", "create linear ticket", "update linear issue".
+description: Reference for working with Linear at LP — access, labels, statuses, citation format. Referenced by `tickets` and team-board skills.
 ---
 
 # Tools and access

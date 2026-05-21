@@ -1,8 +1,6 @@
 ---
 name: wiki
-description: Custodian of `wiki/`. Sweeps session findings into canonical pages, owns the content conventions, lints the wiki for drift on demand. Other skills flag candidates inline with 🔖; this skill reviews and writes.
-when_to_use: |
-  Use at end of session to commit findings, when explicitly asked to "save findings", "wiki capture", "wrap up", or via `/wiki <subcommand>`. The flagging happens inside other skills during work — this skill is the sweep + write step that follows.
+description: Custodian of `wiki/`. Sweeps session findings into canonical pages and lints for drift. Use at end of session or when asked to "save findings", "capture this", "wiki capture", "wrap up", or "lint the wiki".
 argument-hint: '[capture | lint]'
 ---
 
