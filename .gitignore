@@ -45,6 +45,10 @@ groups/*/*
 # Skills system (local per-installation state)
 .nanoclaw/
 
+# Skill contents are synced from lfontes-mono (scripts/sync-shared-skills.ts).
+# The manifest stays tracked; skill dirs are disposable copies.
+container/skills/*/
+
 # Claude Code scheduled-tasks lock (live PID + session id, runtime artifact)
 .claude/scheduled_tasks.lock
 

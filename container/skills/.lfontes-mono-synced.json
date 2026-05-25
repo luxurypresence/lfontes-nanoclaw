@@ -1,14 +1,25 @@
 {
   "skills": [
+    "agent-browser",
     "auggie",
     "builder",
+    "companion-agents",
     "data",
     "feature-qa",
+    "gh-cli",
+    "interactive-prompts",
     "linear",
     "navigator",
+    "ncl-cli",
     "notion",
+    "onecli-gateway",
+    "self-customize",
     "skills-manager",
+    "slack-formatting",
+    "task-scheduling",
     "tickets",
+    "web-search",
+    "whatsapp-formatting",
     "wiki"
   ],
   "files": []

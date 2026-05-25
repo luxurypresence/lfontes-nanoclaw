@@ -1,23 +1,23 @@
 /**
- * sync-shared-skills — copy curated skill dirs from a source repo into
+ * sync-shared-skills — copy curated skill dirs from lfontes-mono into
  * `container/skills/` so they get picked up by the standard skill loader.
  *
- * Background: lfontes-mono is the canonical home for the shared skills
- * (navigator, data, auggie, builder, etc.). The container loader reads from
- * `nanoclaw/container/skills/`. This script bridges the two — fork-free —
- * by copying the source tree into the bundled-skills directory.
+ * Two source roots, merged into one dest dir:
+ *   - $HOME/lfontes-mono/skills/        — Luis-cross-cutting skills
+ *   - $HOME/lfontes-mono/clanq/skills/  — Clanq/nanoclaw-infra skills
+ *
+ * A skill name may appear in only one source root; collisions are an error.
+ * Source-of-truth lives in lfontes-mono; nanoclaw holds disposable copies.
  *
  * Usage:
  *   pnpm tsx scripts/sync-shared-skills.ts
- *   pnpm tsx scripts/sync-shared-skills.ts --source ~/lfontes-mono/skills --skills navigator,data
- *
- * Defaults: source = $HOME/lfontes-mono/skills, all subdirs.
+ *   pnpm tsx scripts/sync-shared-skills.ts --skills navigator,gh-cli
  *
  * Deletions: the script tracks what it synced in `.lfontes-mono-synced.json`
  * inside the dest dir. On re-run, any skill in that manifest that is no
- * longer present in the source gets deleted from `container/skills/`. With
- * `--skills`, only the listed skills are considered for sync OR deletion;
- * manifest entries outside the filter pass through untouched.
+ * longer present in any source root gets deleted from `container/skills/`.
+ * With `--skills`, only the listed skills are considered for sync OR
+ * deletion; manifest entries outside the filter pass through untouched.
  */
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -33,13 +33,18 @@ function flag(name: string): string | undefined {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-const sourceRoot = path.resolve(flag('source') ?? path.join(os.homedir(), 'lfontes-mono', 'skills'));
+const sourceRoots = [
+  path.resolve(path.join(os.homedir(), 'lfontes-mono', 'skills')),
+  path.resolve(path.join(os.homedir(), 'lfontes-mono', 'clanq', 'skills')),
+];
 const dest = path.resolve(__dirname, '..', 'container', 'skills');
 const onlyList = flag('skills')?.split(',').map((s) => s.trim()).filter(Boolean);
 
-if (!fs.existsSync(sourceRoot)) {
-  console.error(`source dir does not exist: ${sourceRoot}`);
-  process.exit(1);
+for (const root of sourceRoots) {
+  if (!fs.existsSync(root)) {
+    console.error(`source dir does not exist: ${root}`);
+    process.exit(1);
+  }
 }
 fs.mkdirSync(dest, { recursive: true });
 
@@ -61,9 +66,24 @@ const prevManifest = readManifest();
 const prevDirs = new Set(prevManifest.skills);
 const prevFiles = new Set(prevManifest.files);
 
-const sourceEntries = fs.readdirSync(sourceRoot, { withFileTypes: true });
-const sourceDirs = new Set(sourceEntries.filter((e) => e.isDirectory()).map((e) => e.name));
-const sourceFiles = new Set(sourceEntries.filter((e) => e.isFile()).map((e) => e.name));
+// Build a merged view of all source roots. A name may live in only one root —
+// collisions are an error (silent override would mask the user's intent).
+const skillSourceRoot = new Map<string, string>();
+const fileSourceRoot = new Map<string, string>();
+for (const root of sourceRoots) {
+  for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+    const bucket = e.isDirectory() ? skillSourceRoot : e.isFile() ? fileSourceRoot : null;
+    if (!bucket) continue;
+    const prev = bucket.get(e.name);
+    if (prev) {
+      console.error(`collision: "${e.name}" exists in both ${prev} and ${root}`);
+      process.exit(1);
+    }
+    bucket.set(e.name, root);
+  }
+}
+const sourceDirs = new Set(skillSourceRoot.keys());
+const sourceFiles = new Set(fileSourceRoot.keys());
 
 // Dir candidates the script will touch on this run.
 // - No filter: every source dir + every previously-synced dir (so deletions propagate).
@@ -77,9 +97,9 @@ let deletedDirs = 0;
 const nextDirs = new Set<string>(prevDirs);
 
 for (const name of dirCandidates) {
-  const src = path.join(sourceRoot, name);
   const dst = path.join(dest, name);
   if (sourceDirs.has(name)) {
+    const src = path.join(skillSourceRoot.get(name)!, name);
     // rsync handles incremental + delete-inside + exclude cleanly.
     execFileSync('rsync', ['-a', '--delete', '--exclude=last-check.json', `${src}/`, `${dst}/`], {
       stdio: 'inherit',
@@ -108,7 +128,7 @@ if (!onlyList) {
   for (const name of fileCandidates) {
     const dst = path.join(dest, name);
     if (sourceFiles.has(name)) {
-      fs.copyFileSync(path.join(sourceRoot, name), dst);
+      fs.copyFileSync(path.join(fileSourceRoot.get(name)!, name), dst);
       copiedFiles++;
       nextFiles.add(name);
     } else if (prevFiles.has(name)) {
@@ -132,6 +152,6 @@ fs.writeFileSync(
 );
 
 console.log(
-  `synced ${copiedDirs} skill dir(s) (-${deletedDirs}), ${copiedFiles} top-level file(s) (-${deletedFiles}) — ${sourceRoot} → ${dest}`,
+  `synced ${copiedDirs} skill dir(s) (-${deletedDirs}), ${copiedFiles} top-level file(s) (-${deletedFiles}) — ${sourceRoots.join(' + ')} → ${dest}`,
 );
 console.log('next: ./container/build.sh + restart service to roll into running containers');
