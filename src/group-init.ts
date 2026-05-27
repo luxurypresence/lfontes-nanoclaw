@@ -25,6 +25,16 @@ const DEFAULT_SETTINGS_JSON =
             ],
           },
         ],
+        SessionEnd: [
+          {
+            hooks: [
+              {
+                type: 'command',
+                command: '/workspace/extra/shared/lfontes-mono/host/scripts/auto-capture-hook.sh',
+              },
+            ],
+          },
+        ],
       },
     },
     null,
@@ -83,6 +93,7 @@ export function initGroupFilesystem(group: AgentGroup, opts?: { instructions?: s
     initialized.push('settings.json');
   } else {
     ensurePreCompactHook(settingsFile, initialized);
+    ensureSessionEndHook(settingsFile, initialized);
   }
 
   // Skills directory — created empty here; symlinks are synced at spawn
@@ -104,6 +115,7 @@ export function initGroupFilesystem(group: AgentGroup, opts?: { instructions?: s
 }
 
 const PRE_COMPACT_COMMAND = 'bun /app/src/compact-instructions.ts';
+const SESSION_END_COMMAND = '/workspace/extra/shared/lfontes-mono/host/scripts/auto-capture-hook.sh';
 
 /**
  * Patch an existing settings.json to add the PreCompact hook if missing.
@@ -127,6 +139,32 @@ function ensurePreCompactHook(settingsFile: string, initialized: string[]): void
 
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
     initialized.push('settings.json (added PreCompact hook)');
+  } catch {
+    // Don't break init if settings.json is malformed — it'll use whatever's there.
+  }
+}
+
+/**
+ * Patch an existing settings.json to add the SessionEnd auto-capture hook
+ * if missing. Mirrors ensurePreCompactHook so pre-existing groups pick up
+ * the hook on next init. Hook source: lfontes-mono CLQ-23.
+ */
+function ensureSessionEndHook(settingsFile: string, initialized: string[]): void {
+  try {
+    const raw = fs.readFileSync(settingsFile, 'utf-8');
+    const settings = JSON.parse(raw);
+
+    const existing = settings.hooks?.SessionEnd as unknown[] | undefined;
+    if (existing && JSON.stringify(existing).includes(SESSION_END_COMMAND)) return;
+
+    if (!settings.hooks) settings.hooks = {};
+    if (!settings.hooks.SessionEnd) settings.hooks.SessionEnd = [];
+    settings.hooks.SessionEnd.push({
+      hooks: [{ type: 'command', command: SESSION_END_COMMAND }],
+    });
+
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+    initialized.push('settings.json (added SessionEnd hook)');
   } catch {
     // Don't break init if settings.json is malformed — it'll use whatever's there.
   }
